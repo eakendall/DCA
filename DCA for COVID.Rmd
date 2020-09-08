@@ -1,0 +1,379 @@
+---
+title: "COVID diagnosis decision curves"
+author: "Emil Kendall"
+date: "August 5, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+Accurate diagnosis of COVID can help to minimize transmission and efficiently allocate resources for isolation, contact tracing, and treatment, while minimizing the harms of intervening unnecessarily or failing to consider alternative diagnoses. In many settings -- both LMICs, and HICs with large outbreaks -- efforts to test for COVID using highly sensitivity molecular tests have quickly exceeded the capacity of central laboratories, and budgetary constraints also limit the number of molecular tests that can be performed. Antigen-based assays could allow for wider testing and rapid results where molecular testing is unavailable or delayed, but one potential downside of such tests is their lower sensitivity relative to nucleic acid amplification methods. For community-level surveillance of asymptomatic individuals, a compelling case has recently been made that frequency of testing and rapidity of results should take priority over sensitivity, and that assays which detect fewer than 80% of NAAT-positive individuals could be a critical tool for containing the spread of SARS-CoV-2. For symptomatic patients in clinical settings, however, it is less clear whether a low-sensitivity rapid test can outperform clinician judgment alone. 
+
+In choosing between a low-sensitivity test and no SARS-CoV-2 testing in the clinical setting, and between rapid antigen tests and more sensitive molecular tests when both are available, one potential guide is decision curve analysis. [Background... net benefit of one testing approach over another, depending on the threshold probability at which the benefits of intervention are believed to outweight its harms... Simplicity...] To give reliable answers for this situation, however, DCA requires a few adaptations. When diagnosis relies on shedding and detection of an infectious pathogen, an assay may be most sensitive for the cases whom it is most critical to diagnose, and evaluating net benefit of a testing strategy based on a simple tally of cases correctly or incorrectly diagnosed may produce biased estimates of the impact on the outcomes of clinical interest. Furthermore, when human judgment is a diagnostic option, the corresponding decision curve should account for the ways that a human may adjust their decision-making based on contextual knowledge that a diagnostic assay does not have. 
+
+We developed a decision curve model for evaluating these decisions about COVID diagnostic testing. Like other DCA, the framework allows for a simple comparison of net benefit of diagnostic tests of varying sensitivities, and between such tests and clinician judgment, across ranges of threshold probability and disease prevalence. Net benefit can then be weighed against considerations such as turnaroudn time and cost to choose a testing approach.) Novel adjustments to the DCA framework allow us to account for clinicians' context-informed behavior, and for the relationship between pathogen burden and assay sensitivities. 
+
+
+```{r}
+# Current incidences
+# India ~230 per million
+(65000/1.4e9)*5*1e6
+# USA 170 per million
+11000/330e6*5*1e6
+# Brazil also ~200
+
+```
+
+# Preferred inputs for a COVID dx DCA:
+
+1. Redefining probability threshold
+
+a. Public health versus clinical objectives
+
+- How many people are you willing to falsely diagnose, to prevent downstream transmission from one case (of average infectiousness, and assuming no change in clinical outcomes) from transmitting virus? 
+** Note that the costs of falsely diagnosing someone with COVID should include the costs of unnecessary clinical management, the costs of any isolation of the patient and/or intervention for their contacts, and the possible harms of missing another diagnosis.
+** How effective is your intervention (if any) for contacts of a known case? I.e. if you know about the case before the contact becomes infectious, what % of transmission by the contacts will you prevent?
+
+- How many people are you willing to falsely diagnose, to get an accurate COVID-19 diagnosis for one person (accounting only for the value of having diagnostic certainty and providing appropriate treatment, ignoring any transmission-related effects -- or in other words, assuming for a moment that this particular patient is minimally infectious)?
+
+b. Time value of detection
+
+- For the non-transmission-related effects, how much does the value of detection diminish over time? I.e. how many people would you be willing to falsely diagnose, in order to have one accurate diagnosis today rather than tomorrow? 
+(For transmission-related effects, will assume a diminishing return as the infectious windom of cases and contacts passes.)
+
+c. Potential considerations beyond FPs and TPs:
+
+[- In general, how to capture the value of certainty in having a negative result? This would be advantageous if the pre-test prob is high enough to treat presumptively, and if the NPV is high enough to trust (i.e. to put an individual patient below your treatment threshold). I.e. thinking about a rule-out test, e.g. for MDRO sepsis or for active TB isolation. You'll also want to account for the time value of a negative result. For COVID, might want to consider that some patients start low enough prob that a neg Ag-RDT could bring them below the empiric rx or isolation threshold, while others would require a negative on a very sensitive test to get to that comfortable post-test probability.]
+
+[- At a population level, is there a certain % of cases that you need to detect? I.e. as you get closer to 100% detection, does the value of detecting one additional case increase? -- probably won't include this one now, but worth thinking about, e.g. for the containmnet stage of a potential pandemic, or for TB in an elimination effort.]
+
+
+2. Clinician judgment can be adapted to context
+
+- If comparing to clinician judgment, how well can clinicians calibrate their judgment to the actual population prevalence and to the desired probability threshold? 
+
+(Will assume clinicians can always rank pts from most to least likely covid, but the discrimination of this ranking isn't great. Within this ranking, a worst case is a set cutpoint with a fixed sensitivity and specificity, applied to all patients who would get diagnostic assay if available. Best case is perfect calibration to the local prevalence and desired PPV. 
+[Between these extremes, the scale is ??? For COVID piece, just consider the two extremes and whether it makes a difference.]
+
+
+3. Evaluating net benefit (adapted formula) relative to costs and capacity
+- Cost per unit net benefit is relatively easy: how much will you pay to get 1 x or avoid a balanced amt of y?
+- Capacity constraints are more difficult. Probably best evaluated by breaking your population into multiple groups, and assuming NAT first for the ones (if any) in whom it had the greatest NB, then considering RDT vs no test in the remaining population once you reach NAT capacity. 
+
+
+## Methods
+
+Simple decision curve assuming a fixed clinician sens/spec and assuming all cases are equally important to detect
+
+```{r}
+# plot a DCA for some test with fixed sens and spec:
+x <- seq(0,1,by=0.01) # threshold probabilities
+weights <- x/(1-x) # number of false positives you'd want to treat per case, at each threshold prob
+
+NB <- function(sens, spec, prev)
+{
+  TP <- sens*prev
+  FP <- (1-spec)*(1-prev)
+  NB <- TP - FP*weights
+  return(NB)
+}
+  
+plotDCA <- function(prev=0.4, sens=0.9, spec=0.5, rsens=0.7, rspec=0.99, psens=0.9, pspec=0.99, plotclin=T, ymax, plotlegend=T, title="") 
+{
+  if(missing(ymax)) ymax <- prev
+  plot(x,NB(psens, pspec, prev), type='l', col='green', xlim=c(0,1), ylim=c(0,ymax),
+       xlab="Threshold probability above which one opts to intervene",
+       ylab="Net benefit",
+       main=title)
+  lines(x, NB(rsens, rspec, prev), col='blue')
+ if(plotclin)  lines(x, NB(sens, spec, prev), col='red')
+  lines(x, NB(sens=1, spec=0, prev), col='black', lty=1)
+  lines(x, NB(sens=0, spec=1, prev), col='black', lty=2)
+  if(plotlegend)legend(x = "topright", legend = c("NAAT","VAT","Clinician","Treat all", "Treat none"),
+         col=c('green','blue','red','black','black'), lty=c(1,1,1,1,2)
+          )
+}
+
+par(mfrow=c(1,2))
+plotDCA(prev=0.4, sens=0.9, spec=0.5, rsens=0.7, rspec=0.99, psens=0.9, pspec=0.99, ymax=0.5, plotlegend = F, title="Hospitalized patients")
+plotDCA(prev=0.1, sens=0.5, spec=0.8, rsens=0.7, rspec=0.98, psens=0.9, pspec=0.98, ymax=0.5, title="Mildly symptomatic")
+
+
+```
+
+
+## Redefining the threshold probability
+
+
+Conventional DCA assumes all true-positive cases are equivalent, identifying the number of false-positives one is willing to treat (or otherwise intervene upon), in order to treat one true positive. Depending on the goal of testing, however, some cases may be more critical to find than others. From the standpoint of transmission, if a test result will determine isolation, it may be most important to find those who have the greatest current or future infectiousness. If a patient will be hospitalized and isolated regardless of test result, then the primary goal may be identification of patients in whom treatment (e.g. steroids, antivirals, convalescent plasma) could reduce mortality. Some outcomes are likely to be correlated with the quantity of viral RNA or antigen in a respiratory specimen -- and thus with assay sensitivty. A broader range of outcomes are time-sensitive, with appropriate classification being more valuable today than two days from now. 
+
+We adapted the threshold probability to reflect these considerations and capture the outcomes we really care about. The number of false-positives one is willing to treat is defined as a function of the benefit achieved, e.g. proportion of clinical consequences or downstream transmission averted. (When both are of interest, the outcome may be a linear combination of these two outcomes.) Net benefit is then defined accordingly. 
+
+a. Public health versus clinical objectives
+
+- How many people are you willing to falsely diagnose, to prevent downstream transmission from one case (of average infectiousness, and assuming no change in clinical outcomes) from transmitting virus? 
+** Note that the costs of falsely diagnosing someone with COVID should include the costs of unnecessary clinical management, the costs of any isolation of the patient and/or intervention for their contacts, and the possible harms of missing another diagnosis.
+
+```{r}
+# Some ways to think about this are: 
+# If the case is minimally symptomatic (so you aren't treating or missing another important diagnosis), then can think about our criteria for contact isolation, where we're willing to isolate a contact for 14d if they are a close contact of a case, with secondary attack rate ~10-20% (https://www.thelancet.com/journals/laninf/article/PIIS1473-3099(20)30471-0/fulltext)
+# If the potential case has symptoms that you will treat (with associated side effets and costs) or might have another disease you'd miss (e.g. bacterial pneumonia), then you don't want to falsely diagnose COVID if the (risk * (treatment AES + harms of isolation + [risk of something else treatable]*[harms of missing that something else] ) > harms of a transmission
+*** When do we in reality make this decision? 
+
+
+## Relative value of clinical outcome prevention versus transmission prevention (if caught at onset of illness)
+# At Rt~1, preventing average transmission means preventing average poor health outcomes as well. If only ~1/10 of secondary cases will be sick enough to be treated, but <1/2 of the poor outcomes of a current case are preventable, and preventing 1 direct secondary case also prevents ~1/2 of *their* future cases (but effect diminishes over time because some of those at risk will get exposed elsewhere), then preventing a full transmission has similar value to diagnosing treating a symptomatic case. 
+ ## (cases prevented per transmission prevented)*(1/symptomatic proportion)*(health harms and costs of symptomstic disease)*(proportion of transmission averted by prompt diagnosis [incl direct transmission, and thru contact notification]) versus
+ ## (health harms and costs of symptomatic disease)*(proportion of health outcomes avertible if diagnosed promptly)
+## = ? (3)*(1/10)*(??)*(3/4) vs (??)*(0.2) -- similar.
+
+
+
+```
+
+...And then need to estimate how much of downstream transmission a diagnosis will prevent, which depends on:
+- A model of the relationship between detection probability and current/future transmission, relative to total average Rt.
+- How effective is your intervention (if any) for contacts of a known case? I.e. if you know about the case before the contact becomes infectious, what % of transmission by the contacts (and then their contacts) will you prevent?
+
+```{r}
+# infectiousness:
+n<-1e5
+
+library(rriskDistributions)
+weibpar <- get.weibull.par(p=c(0, 0.2, 0.99), q=c(0,2,12))
+casetransmits <- rweibull(n = n, shape = weibpar[1], scale = weibpar[2]) - 2
+# will shift this left by two to get timing relative to symptom onset.
+
+# serial interval: mean 6 days, SD 4 days, gamma:
+serial <- rgamma(shape = 6^2/4, rate = 6/4, n = n)
+contactonset <- casetransmits + serial
+contacttransmits <- contactonset <- casetransmits + serial + sample(casetransmits, n, T)
+#mean 6.3, SD = 4.2 days (Bi)
+#The serial interval was estimated to have a mean of 5.8 days (95% confidence interval (CI), 4.8–6.8 days) and a median of 5.2 days (95% CI, 4.1–6.4 days) based on a fitted gamma distribution (He)
+
+par(mfrow=c(1,1))
+# hist(casetransmits, xlim=c(-3,30), freq = F, col="blue")
+plot(density(casetransmits), xlim=c(-3,30), col="blue", xlab="Day relative to symptom onset in case", ylab="")
+lines(density(contacttransmits), col="red")
+legend(x="topright", legend = c("Transmission from case", "Transmission from their contacts"), lty =1, col=c("blue","red"), bty = "n")
+
+# And on an individual level, distribution of infectiousness of cases
+#( Will model variation in infectiousness at diagnosis, and assume that corresponds to variation in avertable transmission -- either because the low ones were always low so weren't very infectious and don't ahve many infected contacts, or because you're cathcing them late when they aren't infectious and their contacts' infectious time has mostly passed.)
+# Dca infxn conservative assumption infectiousness ~ prob(CX+). More likely grows w VL, e.g.~Ct. 
+# Fit log-gnormal distribution of viral qty, between 10^2 and 10^8 copies. 
+# (https://www.bmj.com/content/bmj/369/bmj.m1443.full.pdf)
+normpar <- get.norm.par(p = c(0.025, 0.975), q = c(3,8))
+logvirus <- rnorm(n = n, mean=normpar[1], sd = normpar[2])
+quantile(logvirus, c(0.1,0.3))
+
+# and model infectiousness as proportional to probability of positive culture: 
+# from ~0.1 at 10^4 to ~0.9 at 10^9 (https://wwwnc.cdc.gov/eid/article/26/10/20-2403-f1)
+# similarly from 0 to 100 over ~20 ct = log(2^20)/log(10) = 6 log10s (https://link.springer.com/article/10.1007%2Fs10096-020-03913-9)
+# and ~ linear
+infectivity <- pmax(0, pmin(logvirus-2, 8-2)/(8-2))
+infectivity <- infectivity/mean(infectivity)
+
+# Other assumptions re transmission
+Rt <- 1
+
+presentationDay <- 1
+probTransmissionAverted <- 1
+probContactsIsolate <- 0.5
+
+
+testDelay <- 0.2
+testSens <- 0.8
+testLogLOD <- quantile(logvirus, 1-testSens)
+
+# for a case with average infectivity and above the test LOD, transmission averted is:
+(mean(casetransmits>(presentationDay+testDelay)) + Rt*probContactsIsolate*mean(contacttransmits>(presentationDay+testDelay)))/(1+Rt)
+
+# for the full distribution of cases: 
+transmissionAverted <- 
+  infectivity * (logvirus > testLogLOD) * 
+  (mean(casetransmits>(presentationDay+testDelay)) + Rt*probContactsIsolate*mean(contacttransmits>(presentationDay+testDelay)))/(1+Rt)
+
+summary(transmissionAverted)
+
+# ** make this a function
+# ** and make a figure that illustrates its components: LOD cutoff, corresponding transmissions, time to results, transmissions remaining -- compare for two tests
+
+
+par(mfcol=c(2,2))
+plot(density(casetransmits), xlim=c(-3,30), col="blue", xlab="Day relative to symptom onset in case", ylab="",
+     main = "high infectivity, low-sensitivity rapid test", ylim=c(0,0.2))
+lines(density(contacttransmits), col="red")
+legend(x="topright", legend = c("Transmission from case", "Transmission from their contacts"), lty =1, col=c("blue","red"), bty = "n")
+# abline(v=presentationDay, col="gray")
+abline(v=presentationDay + testDelay, col="black")
+lines((presentationDay + testDelay):30, rep(0, length((presentationDay + testDelay):30)), col="blue", lty=2)
+lines(density(contacttransmits)$x[ density(contacttransmits)$x > presentationDay + testDelay], 0.5*density(contacttransmits)$y[ density(contacttransmits)$x > presentationDay + testDelay], col="red", type='l', lty=2)
+** show total transmission with versus without
+
+plot(density(casetransmits)$x, density(casetransmits)$y/2, xlim=c(-3,30), col="blue", xlab="Day relative to symptom onset in case", ylab="", type='l',
+     main = "low infectivity, low-sensitivity rapid test", ylim=c(0,0.2))
+lines(density(contacttransmits)$x, 0.5*density(contacttransmits)$y, col="red", type='l')
+# abline(v=presentationDay, col="gray")
+# abline(v=presentationDay + testDelay, col="black")
+
+plot(density(casetransmits)$x, density(casetransmits)$y, xlim=c(-3,30), col="blue", xlab="Day relative to symptom onset in case", ylab="", type='l',
+     main = "high infectivity, high-sensitivity delayed test", ylim=c(0,0.2))
+lines(density(contacttransmits)$x, density(contacttransmits)$y, col="red", type='l')
+abline(v=presentationDay + 2, col="black")
+
+```
+
+- How many people are you willing to falsely diagnose, to get an accurate COVID-19 diagnosis for one person (accounting only for the value of having diagnostic certainty and providing appropriate treatment, ignoring any transmission-related effects -- or in other words, assuming for a moment that this particular patient is minimally infectious)?
+
+- And does it make sense to combine these on the same scale? I.e. if you'd allow 5 FPs to avert 1 case's trasmission, and 10 FPs to get an accurate clinical COVID diagnosis (at the outset of sxs), then assume 2 cases averted transmission has the same value as 1 accurate clinical dx?
+
+
+```{r}
+ 
+
+```
+
+Then make separate plots for each, and the whole thing becomes 3D
+
+
+For both, downweight by how much of that will have passed by the time you get a result.
+
+
+
+Finally, discuss the net benefit as something you can weigh relative to cost. Or can apply to RDT vs clinical after you've maxed your PCR capacity. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Model of clinician judgment
+
+Assume clinicians evaluate patients based on clinicial features (incl symptoms, exposure risks, and potential for alternative diagnoses) and could hypothetically rank patients on some arbitary "liklihood of COVID" scale. This ranking may depend on individual-level exposure risk but will be independent of the general prevalence of COVID in the population. In keeping with common approaches to ROC analysis, assume that patients with COVID have clinical-judgment liklihoods normally distributed as $N(m_p,\sigma_p)$, and patients without COVID follow another normal distribution $N(m_n, \sigma_n)$. 
+
+We'll start by assuming equal variances for the positive and negative populations. Take one observed clinician sens and spec (sens 0.95, spec 0.5, in a population with prev 0.1). Set arbitrary means, and fit the variance so that such a point exists. 
+
+```{r}
+# These are on an arbitrary scale, so set an arbitrary mean and sd for the first
+m_p <- 0
+sd_p <- 1
+sensquantile <- qnorm(p = sens, mean = 0, sd=1, lower.tail = F)
+
+# so we want sensquantile of the first distribution, to equal specquantile of the second (lowertail)
+sd_n <- sd_p # assuming equal for now, but can adjust.
+# Now find the mean for the negatives:
+# m_n + sd_n * qnorm(p = 0.5, mean=0, sd=1) = sensquantile
+m_n = sensquantile - sd_n * qnorm(p = spec, mean=0, sd=1)
+
+# Plot the distributions, at two levels of prevalence:
+plothist <- function(prev, nsim, title)
+{ L_p <- rnorm(n = nsim*prev, mean = m_p, sd = sd_p)
+  L_n <- rnorm(n = nsim*(1-prev), mean = m_n, sd = sd_n)
+  hist(L_n, freq = T, breaks=seq(-6,6,by=0.1), main=title)
+  hist(L_p, freq = T, add=T, col='red', breaks=seq(-6,6,by=0.1) )
+}
+par(mfrow=c(1,2))
+plothist(prev = 0.1, nsim = 10000, title="10% prevalence")
+plothist(prev = 0.5, nsim = 10000, title="50% prevalence")
+
+prev <- 0.1
+nsim <- 10000
+L_p <- rnorm(n = nsim*prev, mean = m_p, sd = sd_p)
+L_n <- rnorm(n = nsim*(1-prev), mean = m_n, sd = sd_n)
+plot(ecdf(x = L_p))
+lines(ecdf(x = L_n), col='red')
+abline(v=0, lty=2)
+abline(v=-1, lty=3, col='gray')
+abline(v=0.5, lty=3, col='gray')
+
+```
+
+
+So how do clinicians adjust their judgment depending on threshold prob and prev?
+
+If a clinician knows what the above plot looks like, they can choose the point which has the PPV that they want. 
+
+```{r}
+nsim <- 10000
+prev <- 0.5
+scores <-data.frame(c(rnorm(n = nsim*prev, mean = m_p, sd = sd_p),
+                    rnorm(n = nsim*(1-prev), mean = m_n, sd = sd_n)))
+colnames(scores) <- "score"
+scores$covid <- rep(c(1,0), times=nsim*c(prev, 1-prev))
+
+x
+weights
+
+# for each x, find the cutoff that maximizes NB. 
+
+NBdiscrete <- function(cutoff, thresholdprob)
+{
+  weight <- thresholdprob/(1-thresholdprob)
+  TP <- sum(scores$score>cutoff & scores$covid==1)
+  FP <- sum(scores$score>cutoff & scores$covid==0)
+  NB <- TP - weight*FP
+
+  return(NB)
+}
+
+#example for a specific threshold:
+tprob <- 0.2
+i <- which(x==tprob)
+cutoffNBs <- numeric(length(scores$score))
+for (j in 1:length(cutoffNBs))
+{
+  cutoffNBs[j] <- NBdiscrete(scores$score[j], x[i])
+}
+scores$prevhalfcutoffs <- cutoffNBs
+library(ggplot2)
+ggplot(data=scores, aes(x=score, fill=factor(covid))) + 
+  geom_histogram(alpha=0.5, position="identity", binwidth = 0.1) + 
+   geom_line(aes(x=score, y=prevhalfcutoffs))
+
+
+choosescore <- numeric(length(x))
+considercutoffs <- seq(floor(min(scores$score)), ceiling(max(scores$score)), by = 0.1)
+for (i in 1:length(x))
+{
+  cutoffNBs <- numeric(length(considercutoffs))
+  for (j in 1:length(cutoffNBs))
+  {
+    cutoffNBs[j] <- NBdiscrete(considercutoffs[j], x[i])
+  }
+  choosescore[i] <- considercutoffs[which.max(cutoffNBs)] # account for uncertainty here somewhere?
+}
+
+# what score cutoff should be used for each threshold probability, to maximize net benefit?
+plot(x, choosescore)
+NBs <- numeric(length(x))
+for (i in 1:length(NBs)) NBs[i] <- NBdiscrete(cutoff = choosescore[i], thresholdprob = x[i])
+plot(x, NBs)
+
+
+plotDCA(prev=prev)
+plotDCA(prev=prev, plotclin = F)
+lines(x, NBs/nsim, col='red')
+
+
+```
+
+[How to account for error/imprecision in the clinician's calibration?]
+
+[Or for RDT, account for there being some the clinician would judge so probable that they wouldn't do the RDT??]
+
+[For next piece: Perspective with multiple issues in decision curves (wo too much depth on any one), OR methods piece just on the baseline of DCA that is better than treat all/treat none and that some get treated regardless]
+
+
+
