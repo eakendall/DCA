@@ -83,9 +83,9 @@ plotTransmissions <- function(params,
     
     caseevents$Avertable_clin <- caseevents$value > presentationDay + 0
     caseevents$Averted_clin <- caseevents$Avertable_clin * rbinom(n=nrow(caseevents), # incorporating test sensitivity and isolation effectiveness
-                                                                  size=1, prob = isolationOfKnownCase*caseevents$Pos_clin)
+                                                                  size=1, prob = isolationOfKnownCase*caseevents$Pos_clin*clinicalDiagnosisDiscount)
     
-    ## Contact trnasmission events timing distribution:
+    ## Contact transmission events timing distribution:
     
     # the transmissions that aren't avertable have contact infections that aren't averted and (have transmission after TAT or are missed by falseDiagnosisHarm)
     
@@ -107,7 +107,7 @@ plotTransmissions <- function(params,
     caseevents$Transmits_clin <- 1 - caseevents$Averted_clin
     caseevents$contactTransmissionAvertable_clin <- caseevents$Transmits_clin & caseevents$contacttime >presentationDay + 0
     caseevents$contactTransmissionAverted_clin <- caseevents$contactTransmissionAvertable_clin * rbinom(n=nrow(caseevents), 
-                                                                                                        size=1, prob = isolationOfContacts*Pos_clin)
+                                                                                                        size=1, prob = isolationOfContacts*Pos_clin*clinicalDiagnosisDiscount)
     caseevents$contactTransmits_clin <- caseevents$Transmits_clin & !caseevents$contactTransmissionAverted_clin
     
     # casetransmits are timing, caseTransmissions are indexes fo all events (some repeated), 
@@ -115,190 +115,108 @@ plotTransmissions <- function(params,
     
     caseevents$Transmission <- ifelse(caseevents$Transmits_RDT==0, ifelse(caseevents$Transmits_NAAT==0, "Prevented with either test", "Prevented with Ag-RDT only"), 
                                       ifelse(caseevents$Transmits_NAAT==0, "Prevented with NAAT only", "Occurs regardless of test"))
-    caseevents %>% count(Transmits_NAAT, Transmits_RDT, Transmission)
+    caseevents %>% dplyr::count(Transmits_NAAT, Transmits_RDT, Transmission)
     caseevents$Transmission <- factor(caseevents$Transmission, levels=c("Occurs regardless of test",
                                                                         "Prevented with NAAT only",
                                                                         "Prevented with either test",
                                                                         "Prevented with Ag-RDT only"))
     
-    #   # by timing of transmission, cases
-    #   arranged <- caseevents %>% 
-    #     arrange(value) %>% 
-    #     mutate(rn = row_number())
-    #   arranged_RDT <- subset(caseevents, Transmits_RDT==1) %>% 
-    #     arrange(value) %>% 
-    #     mutate(rn = row_number())
-    #   arranged_NAAT <- subset(caseevents, Transmits_NAAT==1) %>% 
-    #     arrange(value) %>% 
-    #     mutate(rn = row_number())
-    #   arranged_clin <- subset(caseevents, Transmits_clin==1) %>% 
-    #     arrange(value) %>% 
-    #     mutate(rn = row_number())
-    #   
-    #   # by timing of transmission, contacts
-    #   gen2 <- caseevents %>% 
-    #     arrange(contacttime) %>% 
-    #     mutate(rn = row_number())
-    #   gen2_RDT <- subset(caseevents, contactTransmits_RDT==1) %>% 
-    #     arrange(contacttime) %>% 
-    #     mutate(rn = row_number())
-    #   gen2_NAAT <- subset(caseevents, contactTransmits_NAAT==1) %>% 
-    #     arrange(contacttime) %>% 
-    #     mutate(rn = row_number())
-    #   gen2_clin <- subset(caseevents, contactTransmits_clin==1) %>% 
-    #     arrange(contacttime) %>% 
-    #     mutate(rn = row_number())
-    #   
-    #   # by timing of presentation, for all cases not weighted as source cases**
-    #   allcases <- data.frame(presentationDay)
-    #   allcases$RDTDay <- presentationDay + turnaroundTimeRDT
-    #   allcases$NAATDay <- presentationDay + turnaroundTimeNAAT
-    #   allcases$Pos_RDT <- Pos_RDT
-    #   allcases$Pos_NAAT <- Pos_NAAT
-    #   allcases$Pos_clin <- Pos_clin
-    #   tested <- allcases %>% 
-    #     arrange(presentationDay) %>% 
-    #     mutate(rn = row_number())
-    #   detected_RDT <- subset(allcases, Pos_RDT==1) %>% 
-    #     arrange(RDTDay) %>% 
-    #     mutate(rn = row_number())
-    #   detected_NAAT <- subset(allcases, Pos_NAAT==1) %>% 
-    #     arrange(NAATDay) %>% 
-    #     mutate(rn = row_number())
-    #   detected_clin <- subset(allcases, Pos_clin==1) %>% 
-    #     arrange(presentationDay) %>% 
-    #     mutate(rn = row_number())
-    #   
-    #   
-    #   
-    #   # plot transmission
-    #   colors <- c("NAAT" = mycolors[1], "Ag-RDT" = mycolors[2], "Clinical diagnosis" = mycolors[3], 
-    #               "No intervention" = mycolors[4])
-    #   linetypes <- c("From index cases" = "dashed", "From contacts" = "dotdash")
-    #   (transmission <- ggplot() +
-    #       xlim(-3,20) + 
-    #       geom_step(data=arranged[seq(1,nrow(arranged), by=100),], aes(x=value, y=rn, color="No intervention", linetype="From index cases"),size=0.8) +
-    #       geom_step(data=arranged_clin[seq(1,nrow(arranged_clin), by=100),], aes(x=value, y=rn, color='Clinical diagnosis', linetype="From index cases"),size=0.8) +
-    #       geom_step(data=gen2_clin[seq(1,nrow(gen2_clin), by=100),], aes(x=contacttime, y=rn, color='Clinical diagnosis', linetype="From contacts"),size=0.8) +
-    #       geom_step(data=arranged_RDT[seq(1,nrow(arranged_RDT), by=100),], aes(x=value, y=rn, color="Ag-RDT", linetype="From index cases"),size=0.8) +
-    #       geom_step(data=arranged_NAAT[seq(1,nrow(arranged_NAAT), by=100),], aes(x=value, y=rn, color='NAAT', linetype="From index cases"),size=0.8)  +
-    #       geom_step(data=gen2[seq(1,nrow(gen2), by=100),], aes(x=contacttime, y=rn, color="No intervention", linetype="From contacts"),size=0.8) +
-    #       geom_step(data=gen2_RDT[seq(1,nrow(gen2_RDT), by=100),], aes(x=contacttime, y=rn, color="Ag-RDT", linetype="From contacts"),size=0.8) +
-    #       geom_step(data=gen2_NAAT[seq(1,nrow(gen2_NAAT), by=100),], aes(x=contacttime, y=rn, color='NAAT', linetype="From contacts"),size=0.8)  +
-    #       labs(x = "Days from symptom onset",
-    #            color = "Diagnostic approach",
-    #            linetype="Type of transmission event") +
-    #       scale_color_manual(values = c(mycolors[4],mycolors[2],mycolors[1],mycolors[3]), breaks=c("No intervention","Ag-RDT", "NAAT", "Clinical diagnosis") )+
-    #       scale_linetype_manual(values = c("dashed","dotdash"), breaks=c("From index cases", "From contacts") ) +
-    #       scale_y_continuous(name = "Cumulative transmission events", 
-    #                          breaks = npts*c(0,0.25,0.5,0.75,1), 
-    #                          labels = c("0%","25%","50%","75%","100%")) + 
-    #       theme_bw() +
-    #       theme(legend.key.width=unit(1,"cm"))
-    #   )
-
-      
+   
   library(reshape2)
   times <- melt(data = caseevents, id.vars = c("name", "Transmits_RDT", "contactTransmits_RDT"), measure.vars = c("value", "contacttime"))
   times_rdt <- melt(data = subset(caseevents, Transmits_RDT==1 | contactTransmits_RDT==1), id.vars = c("name", "Transmits_RDT", "contactTransmits_RDT"), measure.vars = c("value", "contacttime"))
   times_naat <- melt(data = subset(caseevents, Transmits_NAAT==1 | contactTransmits_NAAT==1), id.vars = c("name", "Transmits_NAAT", "contactTransmits_NAAT"), measure.vars = c("value", "contacttime"))
+  times_clin <- melt(data = subset(caseevents, Transmits_clin==1 | contactTransmits_clin==1), id.vars = c("name", "Transmits_clin", "contactTransmits_clin"), measure.vars = c("value", "contacttime"))
   
   times_rdt <- subset(times_rdt, (variable=="value" & Transmits_RDT==1)|(variable=="contacttime" & contactTransmits_RDT))
   times_naat <- subset(times_naat, (variable=="value" & Transmits_NAAT==1)|(variable=="contacttime" & contactTransmits_NAAT))
+  times_clin <- subset(times_clin, (variable=="value" & Transmits_clin==1)|(variable=="contacttime" & contactTransmits_clin))
   
 
-  # # plot daily (not comulative) transmission
-  # (dailytrans_case <- ggplot(times, aes(x=value, fill=variable, col=variable)) +
-  #     geom_freqpoly(binwidth = 1, aes(y=..count../100)) +
-  #     geom_freqpoly(data=times_rdt, binwidth = 1, aes(y=..count../100), lty=2) +
-  #     geom_freqpoly(data=times_naat, binwidth = 1, aes(y=..count../100), lty=3) +
-  #     ylab("Transmission eventss per 1000 patients per day") +
-  #     xlab("Days since symptom onset")
-  # )
-
-
     # return(dailytrans_case)
-    return(list("noint" = times, "rdt" = times_rdt, "naat" = times_naat))
+    return(list("noint" = times, "rdt" = times_rdt, "naat" = times_naat, "clin" = times_clin))
   })
 }
 
 
-
-colors <- c("No intervention" = "gray", 
-            "Immediate presentation, fully test-driven management" = mycolors[1], 
-            "Delayed presentation, fully test-driven management" = mycolors[2],
-            "Delayed presentation, some empiric isolation (final model)" = mycolors[4])
-
-linetypes <- c("None" = 1,
-               "Ag-RDT" = 2,
-               "NAAT" = 3)
-
-params <- make.params(hosp=F)
-base <- plotTransmissions(params = params)
-(dailytrans_case <- ggplot(base$noint, aes(x=value, fill=variable, lty="None")) +
-    geom_freqpoly(binwidth = 1, aes(y=..count../100, 
-                  col='No intervention', lty="None")) +
-    geom_freqpoly(data=base$rdt, binwidth = 1, aes(y=..count../100, 
-                  col='Delayed presentation, some empiric isolation (final model)', lty="Ag-RDT")) +
-    geom_freqpoly(data=base$naat, binwidth = 1, aes(y=..count../100, 
-                  col='Delayed presentation, some empiric isolation (final model)', lty="NAAT")) +
-    labs(x = "Days since symptom onset",
-         y = "Transmission events per 1000 patients per day") + 
-    theme_bw() +
-    scale_color_manual(name = "Intervention assumptions", values = colors) + 
-    scale_linetype_manual(name= "Diagnostic test", values = linetypes)
-)
-
-# rdt vs naat with: 
-
-## if presents immediately and treated fully basd on test, but tests have diagnostic delay (NAAT>RDT)
-sxparams <- within(params, {isolationOfContacts=1; isolationOfKnownCase=1; 
-  isolationOfCasePendingResult=0
-    medianPresentationDay=0})
-fulltestsx <- plotTransmissions(params = sxparams)
-(dailytrans_case2 <- dailytrans_case + 
-    geom_freqpoly(data=fulltestsx$rdt, binwidth = 1, aes(y=..count../100, 
-                  col='Immediate presentation, fully test-driven management', lty='Ag-RDT')) +
-    geom_freqpoly(data=fulltestsx$naat, binwidth = 1, aes(y=..count../100, 
-                  col='Immediate presentation, fully test-driven management', lty='NAAT'))
-)
-
-
-# delay in presentation, but treat fully based on test
-tparams <- within(params, {isolationOfCasePendingResult=0; isolationOfContacts=1; isolationOfKnownCase=1})
-fulltest <- plotTransmissions(params = tparams)
-(dailytrans_case3 <- dailytrans_case2 + 
-    geom_freqpoly(data=fulltest$rdt, binwidth = 1, aes(y=..count../100, 
-                  col='Delayed presentation, fully test-driven management', lty='Ag-RDT')) +
-    geom_freqpoly(data=fulltest$naat, binwidth = 1, aes(y=..count../100, 
-                  col='Delayed presentation, fully test-driven management', lty='NAAT'))
-)
+colors <- c(
+  "NAAT-guided" = mycolors[1], "Ag-RDT-guided" = mycolors[2], 
+  "Clinical judgment-based" = mycolors[3],
+  "No intervention" = 'gray')
 
 Transmission_source <- c(
-    value = "From index cases",
-    contacttime = "From immediate contacts"
-  )
+  value = "Transmission from index cases",
+  contacttime = "Transmission from their direct contacts" )
 
-dailytrans_case3 + facet_wrap("variable", nrow=2, labeller = labeller(
-  variable = Transmission_source
-))
+dailytrans_case <- list()
+for (hosp in c(T, F))
+{
+  params <- make.params(hosp=hosp)
+  base <- plotTransmissions(params = params)
+  width <- 0.7
+  (dailytrans_case[[paste0("hosp",hosp)]] <- ggplot(base$noint, aes(x=value, fill=variable, col="No intervention")) +
+      geom_freqpoly(binwidth = 1, center=0, aes(y=..count../100, 
+                                                col='No intervention'), lty='33', lwd=width) +
+      geom_freqpoly(data=base$rdt, binwidth = 1, center=0, aes(y=..count../100, 
+                                                               col="Ag-RDT-guided"), lty='33', lwd=width) +
+      geom_freqpoly(data=base$naat, binwidth = 1,center=0,  aes(y=..count../100, 
+                                                                col="NAAT-guided"), lty='34', lwd=width) +
+      geom_freqpoly(data=base$clin, binwidth = 1,center=0,  aes(y=..count../100, 
+                                                                col="Clinical judgment-based"), lty='22', lwd=width) +
+      labs(x = "Days since symptom onset",
+           y = "Transmission events per 1000 patients per day") + 
+      theme_bw() +
+      scale_color_manual(name= "", values = colors, guide = guide_legend(reverse = TRUE)) + 
+      facet_wrap("variable", nrow=2, labeller = labeller(
+    variable = Transmission_source
+      )) + 
+    xlim(c(-3, 25))  + 
+   theme(legend.position = c(0.7,0.8)))
+}
 
+dailytrans_case$hospFALSE
+dailytrans_case$hospTRUE
 
-# Then show cumulative sensitivty and transmission as bar graph
-params <- make.params(hosp=F)
+#### Then show cumulative sensitivty and transmission as bar graph ###
+# params <- make.params(hosp=F)
+params <- make.params(hosp=T)
 sensparam <- c(params$sensitivityNAAT, 
                params$sensitivityNAAT*params$sensitivityRDT_vsNAAT,
                params$sensitivityClinician)
-senstable <- data.frame(sensparam, row.names = c("NAAT", "RDT", "clin"))
+senstable <- data.frame(sensparam, row.names = c("NAAT", "Ag-RDT", "Clinical judgment"))
 senstable$detected <- 
-  (mapTransmissions(params, plots=F))[c("NAATdetection", "RDTdetection", "clindetection")]
-senstable$infweighted <- 
-  (mapTransmissions(params, plots=F))[c("NAATpeakinf", "RDTpeakinf", "clinpeakinf")]
+  unlist((mapTransmissions(params, plots=F))[c("NAATdetection", "RDTdetection", "clindetection")])
 senstable$futureinfweighted <- 
-  (mapTransmissions(params, plots=F))[c("NAATavertable", "RDTavertable", "clinavertable")]
-senstable$prevented <- 
-  (mapTransmissions(params, plots=F))[c("NAATaverted", "RDTaverted", "clinaverted")]
-senstable$test <- rownames(senstable)
-longsenstable <- melt(senstable, id.vars='test')
+  unlist((mapTransmissions(params, plots=F))[c("NAATfuturetrans", "RDTfuturetrans", "clinfuturetrans")])
+senstable$avertable <- 
+  unlist((mapTransmissions(params, plots=F))[c("NAATavertable", "RDTavertable", "clinavertable")])
 
-ggplot(senstable) + geom_bar()
+unlist((mapTransmissions(params, plots=F))[c("NAATpeakinf", "RDTpeakinf", "clinpeakinf")])
+unlist((mapTransmissions(params, plots=F))[c("NAATcontactavertable", "RDTcontactavertable", "clincontactavertable")])
+unlist((mapTransmissions(params, plots=F))[c("allNAATavertable", "allRDTavertable", "allclinavertable")])
+unlist((mapTransmissions(params, plots=F))[c("allNAATcontactavertable", "allRDTcontactavertable", "allclincontactavertable")])
+
+senstable$test <- rownames(senstable)
+
+longsenstable <- melt(senstable, id.vars=c('test'))
+require(plyr)
+longsenstable$variable <- revalue(longsenstable$variable, c(
+  "sensparam"="Sensitivity during acute illness\n(input parameter)", 
+  "detected" = "Sensitivity at clinical presentation,\nunweighted (simulated)",
+  "futureinfweighted" = "Sensitivity at clinical presentation,\nweighted by future transmission\n(simulated, accounting for infectivity)",
+  "avertable" = "Avertable future transmission\n(simulated, accounting for\ninfectivity and diagnostic delay)"))
+longsenstable$variable <- factor(longsenstable$variable, levels = rev(levels(longsenstable$variable)))
+  
+longsenstable %>% 
+  filter(test %in% c("NAAT", "Ag-RDT")) %>%
+  mutate(test = factor(test, levels = c("NAAT", "Ag-RDT"))) %>%
+  ggplot() + geom_col(aes(x=variable, y=value*100, fill=test), position='dodge') + 
+ ylab("% detected or avertable") + xlab("")  + 
+  ylim(c(0,100)) +
+  geom_text(aes( x = variable,y = value*100-5, fill=test, label = round(value*100)), 
+            position = position_dodge(width=1), col='white', fontface='bold') + 
+  scale_fill_manual(values = mycolors[1:2], 
+                    name = element_blank(),
+                    guide = guide_legend(reverse = TRUE) ) + 
+  coord_flip()  + 
+  theme(axis.text=element_text(size=9.5)) 
