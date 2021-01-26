@@ -3,6 +3,7 @@ library(ReIns)
 library(RColorBrewer)
 library(dplyr)
 library(tibble)
+library(ggplot2)
 
 
 set.seed(12345)
@@ -44,7 +45,7 @@ make.params <- function(hosp=T)
     firstGenerationTransmissionWeight <- 0.25 # how much do you value preventing transmission to immediate contacts,
 
     # timing
-    medianPresentationDay <- 3.5
+    medianPresentationDay <- ifelse(hosp, 5, 3.5)
     turnaroundTimeRDT <- 3/24
     turnaroundTimeNAAT <- ifelse(hosp, 1, 3)
     
@@ -73,52 +74,6 @@ make.params <- function(hosp=T)
 }
 
 
-niceParamNames <- names(make.params())
-niceParamNames['prev'] <- 
-  "Prevalence of COVID-19"
-niceParamNames['sensitivityNAAT'] <- 
-  "Sensitivity of NAAT"
-niceParamNames['sensitivityRDT_vsNAAT'] <- 
-  "Sensitivity of RDT (vs NAAT, acute)"
-niceParamNames['isolationOfKnownCase'] <- 
-  "Isolation after case diagnosis"
-niceParamNames['isolationOfCasePendingResult'] <- 
-  "Isolation awaiting test result"
-niceParamNames['infectivityScale'] <- 
-  "Viral burden - infectivity association"
-niceParamNames['turnaroundTimeNAAT'] <- 
-  "NAAT turnaround time (days)"
-niceParamNames['minimumInfectiousLogVirus'] <-
-  "Minimum infectious viral burden (log 10)"
-niceParamNames['isolationOfContacts'] <- 
-  "Isolation of contacts"
-niceParamNames['firstGenerationTransmissionWeight'] <- 
-  "Importance of 1st-generation transmission"
-niceParamNames['sxOnsetDay'] <- 
-  "Days from exposure to symptoms"
-niceParamNames['turnaroundTimeRDT'] <- 
-  "Ag-RDT turnaround time (days)"
-niceParamNames['dailyDecayClinicalBenefit'] <- 
-  "Time sensivity of clinical intervention"
-niceParamNames['specificityRDT'] <- 
-  "Specificity of Ag-RDT"
-niceParamNames["specificityClinician"] <- 
- "Specificity of clinician judgment"
-niceParamNames["sensitivityClinician"] <- 
-  "Sensitivity of clinician judgment"
-niceParamNames["clinicalDiagnosisDiscount"] <- 
-  "Intensity reduction when diagnosed clinically"
-niceParamNames["falseDiagnosisHarm"] <- 
-  "Relative harm of false positives"
-niceParamNames["clinicalVsTransmissionBenefit"] <- 
-  "Contribution of clinical versus transmission\neffects to net benefit"
-niceParamNames["medianPresentationDay"] <- 
-  "Median days from symptoms to presentation"
-
-
-
-
-
 ### utility functions ####
 
 col1 <-  rgb(255,200,200,max = 255, alpha = 70)
@@ -142,7 +97,7 @@ get_diff_vectors <- function(x, y) {
 # So this is a proportion of all transmission, not transmission among those detected. 
 
 #' @return proportion of cases detected, proportion of transmission prevented (after weighting by generation).
-#' Will assume that full clinical benefit potential remains when cases become severe enogh to present. Because those presenting later may lose some options but may benefit more from the options that remain. 
+
 mapTransmissions <- function(params,
                             npts = 1e5, #arbitrary sim size
                             plots=T, plotclin=F) 
@@ -169,7 +124,8 @@ mapTransmissions <- function(params,
   
   if(plots)
   {
-    ggplot(data.frame(logvirus)) + geom_density(aes(x=logvirus), lwd=0.5) + 
+    print(
+      ggplot(data.frame(logvirus)) + geom_density(aes(x=logvirus), lwd=0.5) + 
       geom_vline(xintercept=min(logvirus[Pos_NAAT_onset==1]), lty=2, color=mycolors[1], lwd=0.5) + 
       geom_vline(xintercept=min(logvirus[Pos_RDT_onset==1]), lty=3, color=mycolors[2], lwd=0.5) + 
       xlab("Log10 virus at symptom onset") +
@@ -182,10 +138,7 @@ mapTransmissions <- function(params,
                label="Limit of NAAT detection", color=mycolors[1], hjust=0, vjust=0, size=4) + 
       annotate(geom="text", x=min(logvirus[Pos_RDT_onset==1])+0.1, y=0, 
                label="Limit of Ag-RDT detection", color=mycolors[2], hjust=0, vjust=0, size=4) 
-  #   annotate(geom="text", x=min(logvirus[Pos_NAAT_onset==1])-0.1, y=0, 
-  #            label="Limit of NAAT detection", color=mycolors[1], hjust=0, vjust=0) + 
-  #     annotate(geom="text", x=min(logvirus[Pos_RDT_onset==1])-0.1, y=0, 
-  #              label="Limit of Ag-RDT detection", color=mycolors[2], hjust=0, vjust=0) 
+    )
   }
 
   # infectivity
@@ -228,18 +181,6 @@ mapTransmissions <- function(params,
     text(x = 0, y=100*sensitivityNAAT+1, "NAAT", col=mycolors[1], adj = c(0,0))
     text(x = 0, y=100*sensitivityRDT+1, "Ag-RDT", col=mycolors[2], adj = c(0,0))
     
-    # # old version, infectivity and burden
-    # hist(infectivity, col='black', breaks = seq(0,ceiling(max(infectivity)),by=0.1), xlab="Relative infectivity", freq = T,
-    #      main="Infectivity and detectability")
-    # hist(infectivity[rbinom(npts,1,prob=Pos_NAAT_onset)==1], 
-    #      add=T, breaks = seq(0,ceiling(max(infectivity)),by=0.1))
-    # hist(infectivity[rbinom(npts,1,prob=Pos_RDT_onset)==1], 
-    # # hist(infectivity[rbinom(prob=probPos_RDT)], 
-    #      add=T, breaks = seq(0,ceiling(max(infectivity)),by=0.1), col='white')
-    # abline(v=mean(infectivity[rbinom(npts,1,prob=Pos_RDT_onset)==1]), lty=2, col=mycolors[2], lwd=2)
-    # abline(v=mean(infectivity[rbinom(npts,1,prob=Pos_NAAT_onset - Pos_RDT_onset)==1]), lty=2, col=mycolors[1], lwd=2)
-    # legend("topright", c("Not virologically detected", "Detected by NAAT", "Detected by Ag-RDT and NAAT"), fill=c("black","gray","white"))  
-    # 
     ratio <- sample(infectivity[Pos_RDT_onset==1], size = 100000, replace = T)/ 
         sample(infectivity[Pos_NAAT_onset & !Pos_RDT_onset], size=100000, replace=T) 
       
@@ -250,9 +191,6 @@ mapTransmissions <- function(params,
     i <- (pmax(0, pmin(v-minimumInfectiousLogVirus, max(v)-minimumInfectiousLogVirus)/(max(v)-minimumInfectiousLogVirus)))^infectivityScale
     i <- i/mean(i) # this is infectivity relative to average (at any time point, assumes remains proportional)
     par(mar=c(4,4,1,1))
-    # plot(i,v, type='l', xlab="relative infectivity", ylab="peak value of log viral burden")  
-    # plot(i,10^v, type='l', xlab="relative infectivity", ylab="peak value of log viral burden")  
-    # plot(10^v, i, type='l')
     plot(v,i, type='l', ylab="Relative Infectivity", xlab="Peak value of log viral burden", lwd=2)
     abline(h=mean(infectivity[rbinom(npts,1,prob=Pos_RDT_onset)==1]), lty=2, col=mycolors[2], lwd=2)
     abline(h=mean(infectivity[rbinom(npts,1,prob=Pos_NAAT_onset - Pos_RDT_onset)==1]), lty=2, col=mycolors[1], lwd=2)
@@ -260,7 +198,6 @@ mapTransmissions <- function(params,
          "Mean infectivity, patients detectable\n by Ag-RDT at symptom onset", col=mycolors[2], adj=c(0,0))
     text(x=0, y=0.05+mean(infectivity[rbinom(npts,1,prob=Pos_NAAT_onset - Pos_RDT_onset)==1]), 
          "Mean infectivity, patients detectable\n only by NAAT  at symptom onset", col=mycolors[1], adj=c(0,0))
-    
   }
   
   ##transmission events, with weighting and LOD
@@ -296,7 +233,7 @@ mapTransmissions <- function(params,
                           
   caseevents$Avertable_clin <- caseevents$value > presentationDay + 0
   caseevents$Averted_clin <- caseevents$Avertable_clin * rbinom(n=nrow(caseevents), # incorporating test sensitivity and isolation effectiveness
-                                                               size=1, prob = isolationOfKnownCase*caseevents$Pos_clin)
+                                                               size=1, prob = isolationOfKnownCase*caseevents$Pos_clin*clinicalDiagnosisDiscount)
   
   ## Contact trnasmission events timing distribution:
   
@@ -320,7 +257,7 @@ mapTransmissions <- function(params,
   caseevents$Transmits_clin <- 1 - caseevents$Averted_clin
   caseevents$contactTransmissionAvertable_clin <- caseevents$Transmits_clin & caseevents$contacttime >presentationDay + 0
   caseevents$contactTransmissionAverted_clin <- caseevents$contactTransmissionAvertable_clin * rbinom(n=nrow(caseevents), 
-                                                                                                      size=1, prob = isolationOfContacts*Pos_clin)
+                                                                                                      size=1, prob = isolationOfContacts*Pos_clin*clinicalDiagnosisDiscount)
   caseevents$contactTransmits_clin <- caseevents$Transmits_clin & !caseevents$contactTransmissionAverted_clin
   
   # casetransmits are timing, caseTransmissions are indexes fo all events (some repeated), 
@@ -328,185 +265,100 @@ mapTransmissions <- function(params,
   
   caseevents$Transmission <- ifelse(caseevents$Transmits_RDT==0, ifelse(caseevents$Transmits_NAAT==0, "Prevented with either test", "Prevented with Ag-RDT only"), 
                                  ifelse(caseevents$Transmits_NAAT==0, "Prevented with NAAT only", "Occurs regardless of test"))
-  caseevents %>% count(Transmits_NAAT, Transmits_RDT, Transmission)
+  caseevents %>% dplyr::count(Transmits_NAAT, Transmits_RDT, Transmission)
   caseevents$Transmission <- factor(caseevents$Transmission, levels=c("Occurs regardless of test",
     "Prevented with NAAT only",
     "Prevented with either test",
     "Prevented with Ag-RDT only"))
 
   if(plots){
-  
-    # to generate this figure in an interpretable way, would need to change presentation day to fixed (e.g 3):
-  # gg <- ggplot(data=caseevents, aes(x=value, fill=Transmission)) + 
-  #   geom_histogram( alpha=0.6, bins = 60) + 
-  #     xlim(-3, 16) + 
-  #     xlab("Days after symptom onset") + ylab("Number of transmission events") +
-  #   annotate(
-  #     geom = "curve", xend = c(1,1.25,4)-0.25, yend = c(0,0,0), x = c(7,8,9), y = c(2500,2000,1500), 
-  #     curvature = .3, arrow = arrow(length = unit(2, "mm"))
-  #   ) + 
-  #   annotate("text", x=c(7,8,9), y=c(2500,2000,1500), hjust="left",
-  #        label = c("Presumptive isolation", "Ag-RDT resulted", "NAAT resulted"))
-  # 
     
-  # by timing of transmission, cases
-  arranged <- caseevents %>% 
-    arrange(value) %>% 
-    mutate(rn = row_number())
-  arranged_RDT <- subset(caseevents, Transmits_RDT==1) %>% 
-    arrange(value) %>% 
-    mutate(rn = row_number())
-  arranged_NAAT <- subset(caseevents, Transmits_NAAT==1) %>% 
-    arrange(value) %>% 
-    mutate(rn = row_number())
-  arranged_clin <- subset(caseevents, Transmits_clin==1) %>% 
-    arrange(value) %>% 
-    mutate(rn = row_number())
+    # by timing of transmission, cases
+    arranged <- caseevents %>% 
+      arrange(value) %>% 
+      dplyr::mutate(rn = row_number())
+    arranged_RDT <- subset(caseevents, Transmits_RDT==1) %>% 
+      arrange(value) %>% 
+      dplyr::mutate(rn = row_number())
+    arranged_NAAT <- subset(caseevents, Transmits_NAAT==1) %>% 
+      arrange(value) %>% 
+      dplyr::mutate(rn = row_number())
+    arranged_clin <- subset(caseevents, Transmits_clin==1) %>% 
+      arrange(value) %>% 
+      dplyr::mutate(rn = row_number())
+    
+    # by timing of transmission, contacts
+    gen2 <- caseevents %>% 
+      arrange(contacttime) %>% 
+      dplyr::mutate(rn = row_number())
+    gen2_RDT <- subset(caseevents, contactTransmits_RDT==1) %>% 
+      arrange(contacttime) %>% 
+      dplyr::mutate(rn = row_number())
+    gen2_NAAT <- subset(caseevents, contactTransmits_NAAT==1) %>% 
+      arrange(contacttime) %>% 
+      dplyr::mutate(rn = row_number())
+    gen2_clin <- subset(caseevents, contactTransmits_clin==1) %>% 
+      arrange(contacttime) %>% 
+      dplyr::mutate(rn = row_number())
+    
+    # by timing of presentation, for all cases not weighted as source cases**
+    allcases <- data.frame(presentationDay)
+    allcases$RDTDay <- presentationDay + turnaroundTimeRDT
+    allcases$NAATDay <- presentationDay + turnaroundTimeNAAT
+    allcases$Pos_RDT <- Pos_RDT
+    allcases$Pos_NAAT <- Pos_NAAT
+    allcases$Pos_clin <- Pos_clin
+    tested <- allcases %>% 
+      arrange(presentationDay) %>% 
+      dplyr::mutate(rn = row_number())
+    detected_RDT <- subset(allcases, Pos_RDT==1) %>% 
+      arrange(RDTDay) %>% 
+      dplyr::mutate(rn = row_number())
+    detected_NAAT <- subset(allcases, Pos_NAAT==1) %>% 
+      arrange(NAATDay) %>% 
+      dplyr::mutate(rn = row_number())
+    detected_clin <- subset(allcases, Pos_clin==1) %>% 
+      arrange(presentationDay) %>% 
+      dplyr::mutate(rn = row_number())
   
-  # by timing of transmission, contacts
-  gen2 <- caseevents %>% 
-    arrange(contacttime) %>% 
-    mutate(rn = row_number())
-  gen2_RDT <- subset(caseevents, contactTransmits_RDT==1) %>% 
-    arrange(contacttime) %>% 
-    mutate(rn = row_number())
-  gen2_NAAT <- subset(caseevents, contactTransmits_NAAT==1) %>% 
-    arrange(contacttime) %>% 
-    mutate(rn = row_number())
-  gen2_clin <- subset(caseevents, contactTransmits_clin==1) %>% 
-    arrange(contacttime) %>% 
-    mutate(rn = row_number())
-  
-  # by timing of presentation, for all cases not weighted as source cases**
-  allcases <- data.frame(presentationDay)
-  allcases$RDTDay <- presentationDay + turnaroundTimeRDT
-  allcases$NAATDay <- presentationDay + turnaroundTimeNAAT
-  allcases$Pos_RDT <- Pos_RDT
-  allcases$Pos_NAAT <- Pos_NAAT
-  allcases$Pos_clin <- Pos_clin
-  tested <- allcases %>% 
-    arrange(presentationDay) %>% 
-    mutate(rn = row_number())
-  detected_RDT <- subset(allcases, Pos_RDT==1) %>% 
-    arrange(RDTDay) %>% 
-    mutate(rn = row_number())
-  detected_NAAT <- subset(allcases, Pos_NAAT==1) %>% 
-    arrange(NAATDay) %>% 
-    mutate(rn = row_number())
-  detected_clin <- subset(allcases, Pos_clin==1) %>% 
-    arrange(presentationDay) %>% 
-    mutate(rn = row_number())
-
-  
-  colors <- c(
-    # "Any/All" = mycolors[5],
-              "NAAT" = mycolors[1], "Ag-RDT" = mycolors[2], 
-              "Clinical" = mycolors[3])
-  linetypes <- c("Diagnostic result available" = "dotted", 
-              "COVID-19 diagnosed" = 'solid')
-  
-  (detection <- ggplot() +
-    xlim(-3,20) + 
-      geom_step(data=detected_clin[seq(1,nrow(detected_clin), by=100),], aes(x=presentationDay, y=rn, color='Clinical', linetype='COVID-19 diagnosed'),lwd=0.8) +
-      geom_step(data=tested[seq(1,nrow(tested), by=100),], aes(x=presentationDay, y=rn, color="Clinical", linetype="Diagnostic result available"),lwd=0.8) +
-      geom_step(data=tested[seq(1,nrow(tested), by=100),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Diagnostic result available"),lwd=0.8) +
-    geom_step(data=tested[seq(1,nrow(tested), by=100),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color="NAAT", linetype="Diagnostic result available"),lwd=0.8) +
-    geom_step(data=detected_RDT[seq(1,nrow(detected_RDT), by=100),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="COVID-19 diagnosed"),lwd=0.8) +
-    geom_step(data=detected_NAAT[seq(1,nrow(detected_NAAT), by=100),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color='NAAT', linetype="COVID-19 diagnosed"),lwd=0.8)  +
-    labs(x = "Days from symptom onset",
-         color = "Diagnostic approach", linetype="Step of diagnosis") +
-    # scale_color_manual(values = c(mycolors[5], mycolors[2], mycolors[1], mycolors[3]), breaks = c("Any/All", "Ag-RDT", "NAAT", "Clinical")) + 
-      scale_color_manual(values = c(mycolors[2], mycolors[1], mycolors[3]), breaks = c("Ag-RDT", "NAAT", "Clinical")) + 
-    scale_linetype_manual(values = c("dotted", "solid"), breaks = c("Diagnostic result available", "COVID-19 diagnosed")) + 
-    scale_y_continuous(name = "Cumulative evaluations completed or true-positive results,\namong 100k simulated COVID-19 patients", 
-                       breaks = npts*c(0,0.25,0.5,0.75,1), 
-                       labels = c("0","25k","50k","75k","100k")) + 
-      theme_bw()+
-      theme(legend.key.width=unit(1,"cm"))
-  )
-  
-  # plot transmission
-  colors <- c("NAAT" = mycolors[1], "Ag-RDT" = mycolors[2], "Clinical diagnosis" = mycolors[3], 
-              "No intervention" = mycolors[4])
-  linetypes <- c("From index cases" = "dashed", "From contacts" = "dotdash")
-  (transmission <- ggplot() +
-    xlim(-3,20) + 
-    geom_step(data=arranged[seq(1,nrow(arranged), by=100),], aes(x=value, y=rn, color="No intervention", linetype="From index cases"),size=0.8) +
-      geom_step(data=arranged_clin[seq(1,nrow(arranged_clin), by=100),], aes(x=value, y=rn, color='Clinical diagnosis', linetype="From index cases"),size=0.8) +
-      geom_step(data=gen2_clin[seq(1,nrow(gen2_clin), by=100),], aes(x=contacttime, y=rn, color='Clinical diagnosis', linetype="From contacts"),size=0.8) +
-      geom_step(data=arranged_RDT[seq(1,nrow(arranged_RDT), by=100),], aes(x=value, y=rn, color="Ag-RDT", linetype="From index cases"),size=0.8) +
-    geom_step(data=arranged_NAAT[seq(1,nrow(arranged_NAAT), by=100),], aes(x=value, y=rn, color='NAAT', linetype="From index cases"),size=0.8)  +
-    geom_step(data=gen2[seq(1,nrow(gen2), by=100),], aes(x=contacttime, y=rn, color="No intervention", linetype="From contacts"),size=0.8) +
-    geom_step(data=gen2_RDT[seq(1,nrow(gen2_RDT), by=100),], aes(x=contacttime, y=rn, color="Ag-RDT", linetype="From contacts"),size=0.8) +
-    geom_step(data=gen2_NAAT[seq(1,nrow(gen2_NAAT), by=100),], aes(x=contacttime, y=rn, color='NAAT', linetype="From contacts"),size=0.8)  +
-    labs(x = "Days from symptom onset",
-        color = "Diagnostic approach",
-         linetype="Type of transmission event") +
-    scale_color_manual(values = c(mycolors[4],mycolors[2],mycolors[1],mycolors[3]), breaks=c("No intervention","Ag-RDT", "NAAT", "Clinical diagnosis") )+
-    scale_linetype_manual(values = c("dashed","dotdash"), breaks=c("From index cases", "From contacts") ) +
-    scale_y_continuous(name = "Cumulative transmission events", 
+    
+    colors <- c(
+      # "Any/All" = mycolors[5],
+                "NAAT" = mycolors[1], "Ag-RDT" = mycolors[2], 
+                "Clinical" = mycolors[3])
+    linetypes <- c("Any result" = "dotted", 
+                "Positive result" = 'solid')
+    
+    xmax <- 25
+    (detection <- ggplot() +
+      xlim(-3,xmax) + 
+        geom_step(data=detected_clin[seq(1,nrow(detected_clin), by=npts/1000),], aes(x=presentationDay, y=rn, color='Clinical', linetype='Positive result'),lwd=0.8) +
+        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay, y=rn, color="Clinical", linetype="Any result"),lwd=0.8) +
+        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Any result"),lwd=0.8) +
+      geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color="NAAT", linetype="Any result"),lwd=0.8) +
+      geom_step(data=detected_RDT[seq(1,nrow(detected_RDT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Positive result"),lwd=0.8) +
+      geom_step(data=detected_NAAT[seq(1,nrow(detected_NAAT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color='NAAT', linetype="Positive result"),lwd=0.8)  +
+      labs(x = "Days from symptom onset",
+           color = "Diagnostic approach", linetype="Type of diagnostic\nresult available") +
+        scale_color_manual(values = c(mycolors[2], mycolors[1], mycolors[3]), breaks = c("Ag-RDT", "NAAT", "Clinical")) + 
+      scale_linetype_manual(values = c("dotted", "solid"), breaks = c("Any result", "Positive result")) + 
+      scale_y_continuous(name = "Cumulative evaluations completed or true-positive results,\namong 100 million simulated COVID-19 patients", 
                          breaks = npts*c(0,0.25,0.5,0.75,1), 
-                         labels = c("0%","25%","50%","75%","100%")) + 
-      theme_bw() +
-      theme(legend.key.width=unit(1,"cm"))
+                         labels = c("0","250k","500k","750k","1000k")) + 
+        theme_bw()+
+        theme(legend.key.width=unit(1,"cm"))+ 
+        theme(legend.position = c(0.75, 0.3), 
+              legend.title = element_text(size = 10), legend.text = element_text(size = 9))
     )
-  
-  library(patchwork)
-  detection / transmission
-  
-  # tables of frequencies, this plot as curve
-    tempallcase <- table(floor(caseevents$value*4)/4)
-    allcase <- append(0, tempallcase); names(allcase) <- append(-2.25, names(tempallcase))
-    tempRDTcase <- table((floor(caseevents$value*4)/4)[caseevents$Transmits_RDT==1])
-    RDTcase <- append(0, tempRDTcase); names(RDTcase) <- append(-2.25, names(tempRDTcase))
-    tempNAATcase <- table((floor(caseevents$value*4)/4)[caseevents$Transmits_NAAT==1])
-    NAATcase <- append(0, tempNAATcase); names(NAATcase) <- append(-2.25, names(tempNAATcase))
+    print(
+      detection + geom_label(aes(x=c(15,xmax,22), 
+                                 y=c(max(detected_RDT$rn), max(detected_clin$rn)+npts/20, max(detected_NAAT$rn)-npts/20)),
+                    label = paste0(round(c(max(detected_RDT$rn), max(detected_clin$rn), max(detected_NAAT$rn))/(npts)*100,1),"%"),
+                      label.size=0.2, 
+                    col=colors[c(2,3,1)])
+    )
     
-    allcontact <- table(floor(caseevents$contacttime))
-    RDTcontact <- table(floor(caseevents$contacttime[caseevents$contactTransmits_RDT==1]))
-    NAATcontact <- table(floor(caseevents$contacttime[caseevents$contactTransmits_NAAT==1]))
     
-    par(mfrow=c(2,1))
-    plot(names(allcase), allcase, type='l', xlab="Days from symptom onset", 
-         ylab="Transmission from cases", xlim=c(-3,30), yaxt='n',
-         main="Timing of transmission events")
-    polygon(names(allcase), allcase, col=rgb(0.5,0.5,0.5, alpha=0.3)) 
-    polygon(names(RDTcase), RDTcase, col=rgb(0,0,1,0.3))
-    polygon(names(NAATcase), NAATcase, col=rgb(1,0,0,0.3))
-    lines(names(RDTcase), RDTcase, type='l', col=mycolors[2], lwd=2)
-    lines(names(NAATcase), NAATcase, type='l', col=mycolors[1], lwd=2)
-    legend('topright', lty=1, lwd=2, col=c('black',mycolors[1],mycolors[2]), legend=c("No intervention", "NAAT", "Ag-RDT"))
-    # hist(caseevents$contacttime, col="white", main="Directly from cases", xlab="Day relative to case symptom onset",
-    #      freq=T, xlim=c(-2,40))
-    # hist(caseevents$contacttime[caseevents$contactTransmits_RDT==1], add=T, col=col1,
-    #      freq=T, xlim=c(-2,40))
-    # hist(caseevents$contacttime[caseevents$contactTransmits_NAAT==1], add=T, col=col2,
-    #      freq=T, xlim=c(-2,40))
-    plot(names(allcontact), allcontact, type='l', xlab="Days from index case's symptom onset", 
-         ylab="Transmission from contacts", xlim=c(-3,30), yaxt='n')
-    polygon(names(allcontact), allcontact, col=rgb(0.5,0.5,0.5, alpha=0.3)) 
-    polygon(names(RDTcontact), RDTcontact, col=rgb(0,0,1,0.3))
-    polygon(names(NAATcontact), NAATcontact, col=rgb(1,0,0,0.3))
-    lines(names(RDTcontact), RDTcontact, type='l', col=mycolors[2], lwd=2)
-    lines(names(NAATcontact), NAATcontact, type='l', col=mycolors[1], lwd=2)
-    
-  } else gg <- NA
-    
-    # transmission prevented from cases
-    print(c(
-      1-mean(caseevents$Transmits_NAAT),
-      1-mean(caseevents$Transmits_RDT),
-      1-mean(caseevents$Transmits_clin),
-      (1-mean(caseevents$Transmits_clin))*clinicalDiagnosisDiscount,
-    
-      # transmission prevented from contacts
-      1-mean(caseevents$contactTransmits_NAAT),
-      1-mean(caseevents$contactTransmits_RDT),
-      1-mean(caseevents$contactTransmits_clin),
-      (1-mean(caseevents$contactTransmits_clin))*clinicalDiagnosisDiscount
-    ))
-    
-    # 
     # ## for Overview figure, timing of transmission:
     # 
     par(mfrow=c(1,1), mar=c(3,2,1,1), oma=c(0,0,0,0))
@@ -526,26 +378,7 @@ mapTransmissions <- function(params,
     segments(x0 = 6, x1=6, y0=0, y1 = allcase['6'], lty=3, lwd=1.5)
     # text(5.2,500, "Later diagnosis", srt=90, adj = 0)
     mtext("Days since symptom onset", side = 1, line=2)
-    # 
-    
-    
-    
-    # allv <- table(floor(logvirus*10)/10)
-    # plot(seq(2,11,by=0.1), allv[as.character(seq(2,11,by=0.1))], type='l', xaxt='n', yaxt='n')
-    # polygon(x = c(c(floor(LODs_delay_NAAT[30]*10)/10),seq(floor(LODs_delay_NAAT[30]*10)/10,12,by=0.1)),c(0, allv[as.character(seq(floor(LODs_delay_NAAT[30]*10)/10,12,by=0.1))]), col=rgb(0.5,0.5,0.5, alpha=0.2)) 
-    # polygon(x = c(c(floor(LODs_delay_RDT[30]*10)/10+1),seq(floor(LODs_delay_RDT[30]*10)/10+1,12,by=0.1)),c(0, allv[as.character(seq(floor(LODs_delay_RDT[30]*10)/10+1,12,by=0.1))]), col=rgb(0.5,0.5,0.5, alpha=0.4)) 
-    # text(x=LODs_delay_NAAT[30]+0.5, y=300, "Detectable only\nby high-sensitivity assays", srt=90, adj = 0)
-    # text(x=LODs_delay_RDT[30]+1.5+0.5, y=300, "Detectable by high- or\nlow-sensitivity\nassays", srt=90, adj=0)
-    # mtext("Log viral burden (correlated with infectivity)", side=1)
-    # mtext("Proportion of patients", side=2)
-    # 
-    par(mfrow=c(1,1), mar=c(1,1,1,1), oma=c(0,0,0,0))
-    plot(NA, xlim=c(0,1), ylim=c(0,1), xaxt='n', yaxt='n')
-    mtext("Certainty of diagnosis", side=1)
-    mtext("Intensity of intervention", side=2)
-    # 
-  # Report transmission outcome, relative to reference of preventing all transmission,  
-  # and here, scale contact transmission by gen1.
+  }
   
   transmission_benefit_RDT <- 1 - 
    ( firstGenerationTransmissionWeight*mean(caseevents$Transmits_RDT) + 
@@ -562,7 +395,7 @@ mapTransmissions <- function(params,
   # clinical benefit, exponential decay
   clinical_benefit_RDT <- mean(allcases$Pos_RDT * exp(-(allcases$presentationDay + turnaroundTimeRDT) * dailyDecayClinicalBenefit))
   clinical_benefit_NAAT <- mean(allcases$Pos_NAAT * exp(-(allcases$presentationDay + turnaroundTimeNAAT) * dailyDecayClinicalBenefit))
-  clinical_benefit_clin <- mean(allcases$Pos_clin * exp(-(allcases$presentationDay) * dailyDecayClinicalBenefit))
+  clinical_benefit_clin <- mean(allcases$Pos_clin * exp(-(allcases$presentationDay) * dailyDecayClinicalBenefit)) *clinicalDiagnosisDiscount
   
   return(list("NAAT"=transmission_benefit_NAAT, "RDT"=transmission_benefit_RDT, "clin"=transmission_benefit_clin,
               "NAATclinical"=clinical_benefit_NAAT, "RDTclinical"=clinical_benefit_RDT, "clinclinical"=clinical_benefit_clin,
@@ -573,108 +406,34 @@ mapTransmissions <- function(params,
               "NAATinf" = sum(infectivity[Pos_NAAT==1])/sum(infectivity),
               "RDTinf" = sum(infectivity[Pos_RDT==1])/sum(infectivity), 
               "clininf" = sum(infectivity[Pos_clin==1])/sum(infectivity),
-              "NAATavertable" = sum(subset(caseevents, Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "RDTavertable" = sum(subset(caseevents, Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "clinavertable" = sum(subset(caseevents, Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "NAATaverted" = sum(subset(caseevents, Averted_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "RDTaverted" = sum(subset(caseevents, Averted_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "clinaverted" = sum(subset(caseevents, Averted_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin)
+              "NAATfuturetrans" = sum(subset(caseevents, Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "RDTfuturetrans" = sum(subset(caseevents, Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "clinfuturetrans" = sum(subset(caseevents, Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "NAATavertable" = sum(subset(caseevents, Avertable_NAAT==1 & Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "RDTavertable" = sum(subset(caseevents, Avertable_RDT==1 & Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "clinavertable" = sum(subset(caseevents, Avertable_clin==1 & Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+              "NAATcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_NAAT==1 & Pos_NAAT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+              "RDTcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_RDT==1 & Pos_RDT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+              "clincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+          # allavertable: of all transmission events, which occurred after a positive test resulted
+              "allNAATavertable" = sum(subset(caseevents, Avertable_NAAT==1 & Pos_NAAT==1)$Avertable_clin)/nrow(caseevents),
+              "allRDTavertable" = sum(subset(caseevents, Avertable_RDT==1 & Pos_RDT==1)$Avertable_clin)/nrow(caseevents),
+              "allclinavertable" = sum(subset(caseevents, Avertable_clin==1 & Pos_clin==1)$Avertable_clin)/nrow(caseevents),
+              "allNAATcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_NAAT==1 & Pos_NAAT==1)$contactTransmissionAvertable_clin)/nrow(caseevents),
+              "allRDTcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_RDT==1 & Pos_RDT==1)$contactTransmissionAvertable_clin)/nrow(caseevents),
+              "allclincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/nrow(caseevents) 
               
               ) ) 
   })
   
 }
 
-mapTransmissions(params = make.params(hosp=F))
-mapTransmissions(params = make.params(hosp=T))
-
-# plot potential clinical impact,  avertable M&M:
-timing <- seq(0,30,by=0.1)
-hparams <- make.params(hosp=T)
-cparams <- make.params(hosp=F)
-hmm <- ( hparams$clinicalVsTransmissionBenefit * exp(-hparams$dailyDecayClinicalBenefit * timing)  )
-cmm <- ( cparams$clinicalVsTransmissionBenefit * exp(-cparams$dailyDecayClinicalBenefit * timing)  )
-par(mar=c(3,4,1,1))
-plot(timing, hmm, type='l', col=mycolors[7], lwd=2,
-     xlab="",
-     ylab="")  
-mtext("Value of avertible morbidity and mortality", side=2, line=3, adj=0)
-mtext("benchmarked to value of preventing all transmission", side=2, line=2, cex=0.8)
-mtext("Days since symptom onset", side=1, line=2)
-lines(timing, cmm, col=mycolors[8], lwd=2)
-text(10,0.50,labels = "Hospital", col=mycolors[7])
-text(10,0.05,labels = "Outpatient", col=mycolors[8])
+mapTransmissions(params = make.params(hosp=F), plots=T, npts=1e6)
+mapTransmissions(params = make.params(hosp=T), plots=T, npts=1e6)
 
 
 
-
-########## Simple DCA #######
-#  Simple decision curve assuming a fixed clinician sens/spec and assuming all cases are equally important to detect
-
-# plot a DCA for some test with fixed sens and spec:
-x <- seq(0,1,by=0.01) # threshold probabilities
-weights <- x/(1-x) # number of false positives you'd want to treat per case, at each threshold prob
-
-NB_simple <- function(sens, spec, prev)
-{
-  TP <- sens*prev
-  FP <- (1-spec)*(1-prev)
-  NB <- TP - FP*weights
-  return(NB)
-}
-
-
-plotDCA <- function(prev=0.4, sensitivityClinician=0.9, specificityClinician=0.5, 
-                    sensitivityRDT_vsNAAT=0.85, specificityRDT=0.99, 
-                    sensitivityNAAT=0.9, spec_NAAT=0.99, 
-                    plotclin=T, ymax, plotlegend=T, title="", ylab="Net benefit", lwd=1) 
-{
-  if(missing(ymax)) ymax <- prev
-  sensitivityRDT <- sensitivityRDT_vsNAAT*sensitivityNAAT
-  plot(x,NB_simple(sensitivityNAAT, spec_NAAT, prev), type='l', col=mycolors[1], xlim=c(0,1), ylim=c(0,ymax),
-       ylab=ylab, xlab="",
-       main=title, cex.main=0.9,
-       xaxt='n', lwd=lwd)
-  axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-  lines(x, NB_simple(sensitivityRDT, specificityRDT, prev), col=mycolors[2], lwd=lwd)
-  if(plotclin)  lines(x, NB_simple(sensitivityClinician, specificityClinician, prev), col=mycolors[3], lwd=lwd)
-  lines(x, NB_simple(sens=1, spec=0, prev), col='black', lty=1, lwd=lwd)
-  lines(x, NB_simple(sens=0, spec=1, prev), col='black', lty=2, lwd=lwd)
-  if(plotlegend)legend(x = "topright", legend = c("NAAT","Ag-RDT","Clinical judgment","Treat all", "Treat none"),
-                       col=c(mycolors[1],mycolors[2],mycolors[3],'black','black'), lty=c(1,1,1,1,2), lwd=lwd
-  )
-}
-
-### Plot conventional DCA ###  
-layout(array(c(1,1,1,2,2,2,2), dim=c(7,1)))
-par(mar=c(2,4,3,1), oma=c(2,0,0,0))
-params <- make.params()
-params$sensitivityRDT <- params$sensitivityRDT_vsNAAT * params$sensitivityNAAT
-nsens_all <- 0.8
-rsens_all <- 0.625
-rsens_all_vsNAAT <- 0.78
-
-attach(params)
-plotDCA(prev=0.1, sensitivityClinician=csens_o, specificityClinician = cspec_o,  
-        sensitivityRDT_vsNAAT=rsens_all_vsNAAT, specificityRDT=specificityRDT, 
-        sensitivityNAAT=nsens_all, spec_NAAT=spec_NAAT, ymax=0.1, 
-        title="A. Outpatient Setting", ylab="Net benefit (conventional approach)", lwd=1.5)
-plotDCA(prev=0.4, sensitivityClinician=csens_h, specificityClinician = cspec_h, 
-        sensitivityRDT_vsNAAT=rsens_all_vsNAAT, specificityRDT=specificityRDT, 
-        sensitivityNAAT=nsens_all, spec_NAAT=spec_NAAT, ymax=0.4, plotlegend = F, 
-        title="B. Hospital Setting", ylab="Net benefit (conventional approach)", lwd=1.5)
-mtext(side=1, outer=T, text = "Threshold probability above which one would opt to intervene", line=0.5, cex=0.7)
-x[which(NB_simple(rsens_all, specificityRDT, prev) > NB_simple(sensitivityClinician, specificityClinician, prev))]
-x[which(NB_simple(rsens_all, specificityRDT, prev) > NB_simple(sens=1, spec=0, prev))]
-x[which(NB_simple(nsens_all, spec_NAAT, prev) > NB_simple(sens=1, spec=0, prev))]
-x[which(NB_simple(rsens_all, specificityRDT, prev=0.1) > NB_simple(sensitivityClinician, specificityClinician, prev = 0.1))]
-x[which(NB_simple(rsens_all, specificityRDT, prev=0.1) > NB_simple(sens=1, spec=0, prev = 0.1))]
-detach(params)
-rm(params)
-
-
-  
-##### Calculate Net Benefit with modified formula ######
+##### Calculate Net Benefit with modified formula account for time-sensitivty, diagnostic-associated infectivity  ######
 
 # Net benefit, as a function of test and setting/prevalence and other input parameters incl weights
 # Will want to display this across multiple dimensions of variation, perhaps up to two at a time
@@ -689,8 +448,8 @@ NB <- function(params)
        {   
          mt <- mapTransmissions(params, plots = F)
          
-         trans <- mt[1:3]
-         clinical <- mt[4:6]
+         trans <- mt[c("NAAT","RDT","clin")]
+         clinical <- mt[c("NAATclinical" ,"RDTclinical", "clinclinical")]
          TAT <- list(NAAT = turnaroundTimeNAAT, RDT = turnaroundTimeRDT, clin=0)
         sens <- list(NAAT = mt$NAATdetection, RDT=mt$RDTdetection, clin=mt$clindetection)
         spec <- list(NAAT=spec_NAAT, RDT = specificityRDT, clin=specificityClinician)
@@ -698,16 +457,16 @@ NB <- function(params)
         # note that trans is a proportion of transmission prevented among all patients, not only those detected. 
         # So we can divide by sensitivity to get transmission prevented per detection. 
         transaverted <- as.list(mapply(function(a,b) a/b, trans, sens))
-        
+          
         clinaverted <- as.list(mapply(function(a,b) a/b, clinical, sens))
         
-        # now combine all sources of TP benefit, and discount action in response to clinical decision
-        V_TP <- (mapply(function(x,w,z) I_T *
-                          # ( x + clinicalVsTransmissionBenefit * exp(-dailyDecayClinicalBenefit * y)  )/ 
+        # already accounted for clinical diagnosis discount in maptransmission
+
+                # now combine all sources of TP benefit, and discount action in response to clinical decision
+        V_TP <- (mapply(function(x,w) I_T *
                           ( x + w)  / 
-                          (1+clinicalVsTransmissionBenefit) * # normalizing so that one full TP get a 1 on both NB scales
-                          z, 
-                      x=transaverted, w = clinaverted, z=list(1,1,clinicalDiagnosisDiscount)))
+                          (1+clinicalVsTransmissionBenefit), # normalizing so that one full TP get a 1 on both NB scales, 
+                      x=transaverted, w = clinaverted)) #already accounted for clinical diagnosis discounted in clin detection
         
         V_FP <-  I_T * falseDiagnosisHarm * c(1,1,clinicalDiagnosisDiscount)
         #( (-c_F*clinicalVsTransmissionBenefit ) - (n*isolationOfContacts+1)*i_F)
@@ -719,13 +478,15 @@ NB <- function(params)
         
   
         # treat all, with clinical discount
-        NB[5] <- prev* (I_T * ( (averted$clin + clinicalVsTransmissionBenefit)) * clinicalDiagnosisDiscount ) / (1+clinicalVsTransmissionBenefit )- 
+        NB[5] <- prev* (I_T * ( (transaverted$clin + clinaverted$clin))) / (1+clinicalVsTransmissionBenefit )- 
           (1-prev)*(I_T * falseDiagnosisHarm)*clinicalDiagnosisDiscount
         
       return(NB)
   })
 }
 
+NB(params = make.params(hosp=F))
+NB(params = make.params(hosp=T))
 
 twowayvary <- function(p1, r1, p2=NA, r2=NA, 
                        resetparams # change if needed, for any that will be fixed at a nondefault value
@@ -753,7 +514,7 @@ twowayvary <- function(p1, r1, p2=NA, r2=NA,
 }
 
 
-###### Decision curves for threshold probability, hospital #######3
+###### Decision curves for threshold probability #######
 
 vary1 <- "falseDiagnosisHarm"
 # if we want probability threshold pt to range from 0 to 1, then 
@@ -765,96 +526,122 @@ range1 <- pt/(1-pt)
 probthreshold <- twowayvary(vary1, range1) # standard param values
 altparams <- make.params(); altparams$clinicalDiagnosisDiscount <- 1
 probthreshold2 <- twowayvary(vary1, range1, resetparams = altparams)
-altparams_sens <- altparams_tat <- altparams
+altparams_sens <- altparams_tat <- altparams_tat3 <- altparams
 altparams_sens$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
 altparams_tat$turnaroundTimeNAAT <- 2 # for acute infection, 90% in Kruger, 95% in Igloi
+altparams_tat3$turnaroundTimeNAAT <- 3 # for acute infection, 90% in Kruger, 95% in Igloi
 probthreshold_sens <- twowayvary(vary1, range1, resetparams = altparams_sens) # standard param values
 probthreshold_tat <- twowayvary(vary1, range1, resetparams = altparams_tat) # standard param values
+probthreshold_tat3 <- twowayvary(vary1, range1, resetparams = altparams_tat3) # standard param values
 #outpatient
 altparams <- make.params(hosp = F); 
 probthreshold4 <- twowayvary(vary1, range1, resetparams = altparams)
 altparams$clinicalDiagnosisDiscount <- 1
 probthreshold3 <- twowayvary(vary1, range1, resetparams = altparams)
-altparams_sens_outpt <- altparams_tat_outpt <- altparams
+altparams_sens_outpt <- altparams_tat_outpt <- altparams_tat1_outpt <- altparams
 altparams_sens_outpt$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
 altparams_tat_outpt$turnaroundTimeNAAT <- 2 # for acute infection, 90% in Kruger, 95% in Igloi
+altparams_tat1_outpt$turnaroundTimeNAAT <- 1
 probthreshold_sens_outpt <- twowayvary(vary1, range1, resetparams = altparams_sens_outpt) # standard param values
 probthreshold_tat_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat_outpt) # standard param values
+probthreshold_tat1_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat1_outpt) # standard param values
 
-# plot it (Figure 4)
-layout(t(array(c(1,2,1,2,1,2,3,4,3,4,3,4,3,4), dim=c(2,7))))
-# par(mfrow=c(2,2))
+# Figure 3
+layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
 par(mar=c(3,4,3,2), oma=c(2,0,0,0))
 
 plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
      xlab="Threshold probability", ylab="Net benefit", 
      main="Outpatient setting",
-     ylim=c(0, max(probthreshold3, na.rm=T)),
-     xaxt='n')
+     ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
+     xaxt='n', lty=5, lwd=2)
 axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.04, "A", font=2, cex=1.5)
-lines(pt, probthreshold3[2,,1], col=mycolors[2])
-lines(pt, probthreshold_sens_outpt[2,,1], col=mycolors[2], lty=2)
-lines(pt, probthreshold_tat_outpt[1,,1], col=mycolors[1], lty=2)
-legend(x = "topright", legend = c("NAAT (3 day)", "NAAT (2 day)", 
-                                  "Ag-RDT (85% sens)","Ag-RDT (95% sens)"),
-       col=c(mycolors[1],mycolors[1],mycolors[2],mycolors[2]), lty=c(1,2,1,2))
+text(0,0.08, "A", font=2, cex=1.5)
+lines(pt, probthreshold3[2,,1], col=mycolors[2], lwd=2)
+lines(pt, probthreshold_sens_outpt[2,,1], col=mycolors[2], lty=4, lwd=1)
+lines(pt, probthreshold_tat_outpt[1,,1], col=mycolors[1], lty=3, lwd=1)
+lines(pt, probthreshold_tat1_outpt[1,,1], col=mycolors[1], lty=1, lwd=1)
+legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
+                                  "Ag-RDT (95% acute sens)","Ag-RDT (85% acute sens)"),
+       col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), 
+       lty=c(1,3,5,4,1), 
+       lwd=c(1,1,2,1,2), seg.len = 3)
+
+plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
+     xlab="Threshold probability", ylab="Net benefit", 
+     main="Hospital setting",
+     ylim=c(0, max(probthreshold2, na.rm=T)),
+     xaxt='n', lwd=2)
+axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
+text(0,0.195, "B", font=2, cex=1.5)
+lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
+lines(pt, probthreshold_sens[2,,1], col=mycolors[2], lty=4, lwd=1)
+lines(pt, probthreshold_tat[1,,1], col=mycolors[1], lty=3, lwd=1)
+lines(pt, probthreshold_tat3[1,,1], col=mycolors[1], lty=5, lwd=1)
+legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
+                                    "Ag-RDT (95% sens)", "Ag-RDT (85% sens)"),
+       col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), lty=c(1,3,5,4,1),
+       lwd = c(2,1,1,1,2), seg.len = 3)
+
+
+
+# Figure 4
+
+layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
+par(mar=c(3,4,3,2), oma=c(2,0,0,0))
 
 plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
      xlab="Threshold probability", ylab="Net benefit", 
      main="Outpatient setting",
-     ylim=c(0, max(probthreshold3, na.rm=T)),
-     xaxt='n')
+     ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
+     xlim=c(0,0.6),
+     xaxt='n', lty=5, lwd=2)
 axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.04, "B", font=2, cex=1.5)
-lines(pt, probthreshold3[2,,1], col=mycolors[2])
-lines(pt, probthreshold3[3,,1], col=mycolors[3])
-lines(pt, probthreshold3[5,,1], col='black', lty=1)
+text(0.05,0.08, "A", font=2, cex=1.5)
+lines(pt, probthreshold3[2,,1], col=mycolors[2], lwd=2)
+lines(pt, probthreshold3[3,,1], col=mycolors[3], lwd=1.5, lty=3)
+lines(pt, probthreshold3[5,,1], col='black', lty=3, lwd=1.5)
 abline(h = 0, col='black', lty=4)
-lines(pt, probthreshold4[3,,1], col=mycolors[3], lty=3)
-lines(pt, probthreshold4[5,,1], col='black', lty=3)
-legend(x = "topright", legend = c("NAAT (3 day)","Ag-RDT (85% sens)","Clinical, full", "Clinical, reduced",
-                                  "Treat all, full", "Treat all, reduced", "Treat none"),
-       col=c(mycolors[1],mycolors[2],mycolors[3], mycolors[3],'black','black','black'), lty=c(1,1,1,3,1,3,4))
-
+lines(pt, probthreshold4[3,,1], col=mycolors[3], lty=1, lwd=1.5)
+lines(pt, probthreshold4[5,,1], col='black', lty=1, lwd=1.5)
+# legend(x = "bottomright", legend = c(
+#   # "NAAT (3 day)","Ag-RDT (85% sens)",
+#   "Clinical, full", "Clinical, reduced",
+#   "Treat all, full", "Treat all, reduced", "Treat none"),
+#   # col=c(mycolors[1],mycolors[2],mycolors[3], mycolors[3],'black','black','black'), lty=c(5,1,1,3,1,3,4),
+#   col=c(mycolors[3], mycolors[3],'black','black','black'), lty=c(3,1,3,1,4),
+#   lwd = c(1.5,1.5,1.5,1.5,1), seg.len=2.5)
 
 plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
      xlab="Threshold probability", ylab="Net benefit", 
      main="Hospital setting",
-     ylim=c(0, max(probthreshold2, na.rm=T)),
-     xaxt='n')
+     ylim=c(0, max(probthreshold2, na.rm=T)), xlim=c(0,0.6),
+     xaxt='n', lwd=2)
 axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.29, "C", font=2, cex=1.5)
-lines(pt, probthreshold2[2,,1], col=mycolors[2])
-lines(pt, probthreshold_sens[2,,1], col=mycolors[2], lty=2)
-lines(pt, probthreshold_tat[1,,1], col=mycolors[1], lty=2)
-legend(x = "topright", legend = c("NAAT (1 day)", "NAAT (2 day)", 
-                                  "Ag-RDT (85% sens)","Ag-RDT (95% sens)"),
-       col=c(mycolors[1],mycolors[1],mycolors[2],mycolors[2]), lty=c(1,2,1,2))
-
-plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability", ylab="Net benefit", 
-     main="Hospital setting",
-     ylim=c(0, max(probthreshold2, na.rm=T)),
-     xaxt='n')
-axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.29, "D", font=2, cex=1.5)
-lines(pt, probthreshold2[2,,1], col=mycolors[2])
-lines(pt, probthreshold2[3,,1], col=mycolors[3])
-lines(pt, probthreshold2[5,,1], col='black', lty=1)
+text(0.05,0.195, "B", font=2, cex=1.5)
+lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
+lines(pt, probthreshold2[3,,1], col=mycolors[3], lwd=1.5, lty=3)
+lines(pt, probthreshold2[5,,1], col='black', lty=3, lwd=1.5)
 abline(h = 0, col='black', lty=4)
-lines(pt, probthreshold[3,,1], col=mycolors[3], lty=3)
-lines(pt, probthreshold[5,,1], col='black', lty=3)
-legend(x = "topright", legend = c("NAAT (1 day)","Ag-RDT (85% sens)","Clinical, full", "Clinical, reduced",
+lines(pt, probthreshold[3,,1], col=mycolors[3], lty=1, lwd=1.5)
+lines(pt, probthreshold[5,,1], col='black', lty=1, lwd=1.5)
+legend(x = "bottomright", legend = c(
+  "NAAT","Ag-RDT",
+  "Clinical, full", "Clinical, reduced",
                                   "Treat all, full", "Treat all, reduced", "Treat none"),
-       col=c(mycolors[1],mycolors[2],mycolors[3], mycolors[3],'black','black','black'), lty=c(1,1,1,3,1,3,4))
+       col=c(mycolors[1], mycolors[2], mycolors[3], mycolors[3],'black','black','black'), lty=c(5,1,3,1,3,1,4),
+  lwd=c(2,2,1.5,1.5,1.5,1.5,1), seg.len = 2)
 
-mtext(side=1, outer=T, text = "Threshold probability above which early intervention for an average case provides net benefit", line=0.5, cex = 0.8)
+mtext(side=1, outer=T, text = "Threshold probability above which early intervention
+      for an average case provides net benefit", line=0.5, cex = 0.8)
+
 
 pt
-probthreshold[5,,1]
+probthreshold2[5,,1]
+probthreshold2[1,,1]
 pt
-probthreshold4[5,,1]
+probthreshold3[5,,1]
+probthreshold3[2,,1]
 
 
 ##### One-way sensitivity analysis, NAAT vs RDT. (Hosp setting) #####
@@ -869,10 +656,10 @@ gethilo <- function(params, level, hosp=T)
   hiloparams$presx <- c(0.5,0.12)
   hiloparams$Period <- c(8,3)
   hiloparams$isolationOfKnownCase <- (if (hosp) c(1,0.5) else c(0.9,0.4))
-  hiloparams$isolationOfCasePendingResult <- (if(hosp) c(0.9, 0.4) else c(0.6, 0))
+  hiloparams$isolationOfCasePendingResult <- (if(hosp) c(0.9, 0.4) else c(0.8, 0))
   hiloparams$isolationOfContacts <- c(0.7,0)
   hiloparams$sxOnsetDay <- c(4,1)
-  hiloparams$medianPresentationDay <- c(6,2)
+  hiloparams$medianPresentationDay <- (if(hosp) c(8, 3) else c(5,2))
   hiloparams$duration <- c(12,5)
   hiloparams$minimumInfectiousLogVirus <- c(5,2)
   hiloparams$infectivityScale <- c(3,0) # 1 = log-linear -- how skewed is the infectivity distribution, in relation to viral load?
@@ -909,96 +696,10 @@ gethilo <- function(params, level, hosp=T)
 
 
 
-####### sensitivty, transmission benefit ##########
-hospplot <- T
-resetparams <- make.params(hosp = hospplot)
-highparams <- gethilo(params = resetparams, level="high", hosp = hospplot)
-lowparams <- gethilo(params = resetparams, level="low", hosp = hospplot)
-excludeparams <- c("weibpar", "normpar", "csens_h","csens_o","cspec_h","cspec_o")
-infecthigh <- infectlow <- array(dim=c(3,length(resetparams)),dimnames = list(c("NAAT","RDT","clin"), names(resetparams)))
-for (name in names(resetparams))
-{ 
-  onehighparam <- onelowparam <- resetparams; 
-  onehighparam[[name]] <- highparams[[name]]
-  onelowparam[[name]] <- lowparams[[name]]
-  ref <- unlist(mapTransmissions(params = resetparams, plots=F))
-  infecthigh[,name] <- unlist(mapTransmissions(params = onehighparam, plots = F))[1:3]
-  infectlow[,name] <- unlist(mapTransmissions(params = onelowparam,  plots = F))[1:3]
-  print(name)
-  
-}
-infecthigh <- rbind(infecthigh, infecthigh["RDT",]/infecthigh["NAAT",])
-rownames(infecthigh)[4] <- "assaydiff"
-infectlow <- rbind(infectlow, infectlow["RDT",]/infectlow["NAAT",])
-rownames(infectlow)[4] <- "assaydiff"
-library(reshape2)
-dathigh <- melt(infecthigh["assaydiff",]); dathigh$val <- "max"
-datlow <- melt(infectlow["assaydiff",]); datlow$val <- "min"
-datlow$names <- rownames(datlow); dathigh$names <- rownames(dathigh)
-baseline <- ref["RDT"]/ref["NAAT"]
-require(dplyr)
-dat <- rbind(datlow, dathigh) 
-keepnames <- setdiff(dathigh$names[pmax(dathigh$value/baseline, datlow$value/baseline, dathigh$value/datlow$value, datlow$value/dathigh$value, na.rm = T) > 1.1], 
-                     excludeparams)
-dat <- subset(dat, (dat$names %in% keepnames) )
-dat <- dat %>% arrange(names)
-# and include a version with extremes of multiple parameters
-Nparams <- Rparams <- resetparams
-for (name in keepnames) if (dat %>% filter(names==name, val=="max") %>% select(value) > 
-                            dat %>% filter(names==name, val=="min") %>% select(value)) 
-                        {Rparams[[name]] <- highparams[[name]]; Nparams[[name]] <- lowparams[[name]]} else 
-                           {Rparams[[name]] <- lowparams[[name]]; Nparams[[name]] <- highparams[[name]]}
-# dat <- rbind(c(unlist(mapTransmissions(params = Nparams,  plots = F))["RDT"]/
-#                       unlist(mapTransmissions(params = Nparams,  plots = F))["NAAT"],
-#                     "All favor alternative",
-#                     "All of the above"),
-#              dat)
-# dat <- rbind(c(unlist(mapTransmissions(params = Rparams,  plots = F))["RDT"]/
-#                       unlist(mapTransmissions(params = Rparams,  plots = F))["NAAT"],
-#                     "All favor Ag-RDT",
-#                     "All of the above"),
-#              dat)
-
-dat$value <- as.numeric(dat$value)
-# prep for tornado plotting
-class(dat) <- c("tornado", class(dat))
-attr(dat, "output_name") <- "value"
-dat$names <- paste0(niceParamNames[dat$names], "\n   (",unlist(lowparams)[dat$names], "-",unlist(highparams)[dat$names],")")
-# dat$names[3:(nrow(dat))] <- paste0(dat$names[3:(nrow(dat))], " (",unlist(lowparams)[dat$names[3:(nrow(dat))]], "-",unlist(highparams)[dat$names[3:(nrow(dat))]],")")
-
-library(ggplot2)
-source("tornadoplot.R")
-# label <- data.frame(x = 1, y = 2, label = c(">100"))
-if(hospplot) {(gtrans_h <- ggplot_tornado(dat, baseline, title="One-way sensitivity analysis,\nTransmission benefit of Ag-RDT vs NAAT,\nhospital setting") + 
-  ylab("Value of Ag-RDT relative to NAAT \n(values >1 favor Ag-RDT)") +
-  xlab("Parameter (range explored)")+ 
-    geom_hline(yintercept = 1)+
-    ylim(c(0,1.6))); baseline_h <- baseline} else
-{(gtrans_o <- ggplot_tornado(dat, baseline, title="One-way sensitivity analysis,\nTransmission benefit of Ag-RDT vs NAAT,\noutpatient setting") + 
-  # scale_y_log10(limits=c(0.8,1.5), breaks=c(0.5,1,2,4,8,16,32)) + 
-  # ylab("Value of Ag-RDT relative to NAAT \n(values >1 favor Ag-RDT)") + 
-   ylab("") + 
-  xlab("Parameter (range explored)")+
- geom_hline(yintercept = 1)+
-   ylim(c(0,1.6))); baseline_o <- baseline}
-
-# For text:
-unlist(mapTransmissions(params = Nparams,  plots = F))["RDT"]/
-  unlist(mapTransmissions(params = Nparams,   = F))["NAAT"]
-unlist(mapTransmissions(params = Rparams,  plots = F))["RDT"]/
-  unlist(mapTransmissions(params = Rparams,  plots = F))["NAAT"]
-
-
-# gtrans_o / gtrans_h
-gtrans_o + gtrans_h +   plot_layout(ncol = 1, heights = c(3,2))
-
-
-
 ###### sensitivity, net benefit  ##########
 set.seed(55555)
-hospplot <- T
+hospplot <- F
 resetparams <- make.params(hosp=hospplot)
-resetparams$clinicalDiagnosisDiscount <- 1
 highparams <- gethilo(params = resetparams, level="high", hosp = hospplot)
 lowparams <- gethilo(params = resetparams, level="low", hosp=hospplot)
 excludeparams <- c("weibpar", "normpar", "csens_h","csens_o","cspec_h","cspec_o")
@@ -1019,31 +720,33 @@ NBlow <- rbind(NBlow, NBlow["RDT",]/NBlow["NAAT",], NBlow["RDT",]/NBlow["clin",]
 rownames(NBhigh)[6] <- rownames(NBlow)[6] <- "assayratio"
 rownames(NBhigh)[7] <- rownames(NBlow)[7] <- "clinratio"
 library(reshape2)
-dathigh <- melt(NBhigh["assayratio",]); dathigh$val <- "max"
-dathighclin <- melt(NBhigh["clinratio",]); dathighclin$val <- "max"
-datlow <- melt(NBlow["assayratio",]); datlow$val <- "min"
-datlowclin <- melt(NBlow["clinratio",]); datlowclin$val <- "min"
+dathigh <- melt(NBhigh["assayratio",]); dathigh$val <- "High parameter value"
+dathighclin <- melt(NBhigh["clinratio",]); dathighclin$val <- "High parameter value"
+datlow <- melt(NBlow["assayratio",]); datlow$val <- "Low parameter value"
+datlowclin <- melt(NBlow["clinratio",]); datlowclin$val <- "Low parameter value"
 datlow$names <- datlowclin$names <- rownames(datlow); dathigh$names <- dathighclin$names <- rownames(dathigh)
 baseline <- NBref["RDT"]/NBref["NAAT"]; baselineclin <- NBref["RDT"]/NBref["clin"]
 
 require(dplyr)
 dat <- rbind(datlow, dathigh) 
 datclin <- rbind(datlowclin, dathighclin) 
-keepnames <- setdiff(dathigh$names[pmax(dathigh$value/baseline, datlow$value/baseline, dathigh$value/datlow$value, datlow$value/dathigh$value) > 1.1], excludeparams)
-keepnamesclin <- setdiff(dathighclin$names[pmax(dathighclin$value/baselineclin, datlowclin$value/baselineclin, dathighclin$value/datlowclin$value, datlowclin$value/dathighclin$value) > 1.2], excludeparams_clin)
+keepnames <- setdiff(dathigh$names[pmax(dathigh$value/baseline, datlow$value/baseline, dathigh$value/datlow$value, datlow$value/dathigh$value) >
+                                     1.05], excludeparams)
+keepnamesclin <- setdiff(dathighclin$names[pmax(dathighclin$value/baselineclin, datlowclin$value/baselineclin, dathighclin$value/datlowclin$value, datlowclin$value/dathighclin$value) > 
+                                             1.1], excludeparams_clin)
 dat <- subset(dat, (dat$names %in% keepnames) ); datclin <- subset(datclin, (datclin$names %in% keepnamesclin) )
 dat <- dat %>% arrange(names); datclin <- datclin %>% arrange(names)
 
 # and include a version with extremes of multiple parameters
 Nparams <- Rparams <- Nparamsclin <- Rparamsclin <- Nparamsclin2 <- Rparamsclin2  <- resetparams
 for (name in keepnames)
-   if (dat %>% filter(names==name, val=="max") %>% select(value) > 
-                            dat %>% filter(names==name, val=="min") %>% select(value)) 
+   if (dat %>% filter(names==name, val=="High parameter value") %>% select(value) > 
+                            dat %>% filter(names==name, val=="Low parameter value") %>% select(value)) 
     {Rparams[[name]] <- highparams[[name]]; Nparams[[name]] <- lowparams[[name]]} else 
     {Rparams[[name]] <- lowparams[[name]]; Nparams[[name]] <- highparams[[name]]}
 for (name in keepnamesclin)
-  if (datclin %>% filter(names==name, val=="max") %>% select(value) > 
-      datclin %>% filter(names==name, val=="min") %>% select(value)) 
+  if (datclin %>% filter(names==name, val=="High parameter value") %>% select(value) > 
+      datclin %>% filter(names==name, val=="Low parameter value") %>% select(value)) 
   {Rparamsclin[[name]] <- highparams[[name]]; Nparamsclin[[name]] <- lowparams[[name]];
   Rparamsclin2[[name]] <- highparams[[name]]; Nparamsclin2[[name]] <- lowparams[[name]]} else 
   {Rparamsclin[[name]] <- lowparams[[name]]; Nparamsclin[[name]] <- highparams[[name]];
@@ -1073,6 +776,49 @@ dat$value <- as.numeric(dat$value)
 #              datclin)
 datclin$value <- as.numeric(datclin$value)
 
+# rename params for display
+niceParamNames <- names(make.params())
+niceParamNames['prev'] <- 
+  "Prevalence of COVID-19"
+niceParamNames['sensitivityNAAT'] <- 
+  "Sensitivity of NAAT"
+niceParamNames['sensitivityRDT_vsNAAT'] <- 
+  "Sensitivity of RDT (vs NAAT, acute)"
+niceParamNames['isolationOfKnownCase'] <- 
+  "Isolation after case diagnosis"
+niceParamNames['isolationOfCasePendingResult'] <- 
+  "Isolation awaiting test result"
+niceParamNames['infectivityScale'] <- 
+  "Viral burden - infectivity association"
+niceParamNames['turnaroundTimeNAAT'] <- 
+  "NAAT turnaround time (days)"
+niceParamNames['minimumInfectiousLogVirus'] <-
+  "Minimum infectious viral burden (log 10)"
+niceParamNames['isolationOfContacts'] <- 
+  "Isolation of contacts"
+niceParamNames['firstGenerationTransmissionWeight'] <- 
+  "Importance of 1st-generation transmission"
+niceParamNames['sxOnsetDay'] <- 
+  "Days from exposure to symptoms"
+niceParamNames['turnaroundTimeRDT'] <- 
+  "Ag-RDT turnaround time (days)"
+niceParamNames['dailyDecayClinicalBenefit'] <- 
+  "Time sensivity of clinical intervention"
+niceParamNames['specificityRDT'] <- 
+  "Specificity of Ag-RDT"
+niceParamNames["specificityClinician"] <- 
+  "Specificity of clinician judgment"
+niceParamNames["sensitivityClinician"] <- 
+  "Sensitivity of clinician judgment"
+niceParamNames["clinicalDiagnosisDiscount"] <- 
+  "Intensity reduction when diagnosed clinically"
+niceParamNames["falseDiagnosisHarm"] <- 
+  "Relative harm of false positives"
+niceParamNames["clinicalVsTransmissionBenefit"] <- 
+  "Contribution of clinical versus transmission\neffects to net benefit"
+niceParamNames["medianPresentationDay"] <- 
+  "Median days from symptoms to presentation"
+
 # prep for tornado plotting
 class(dat) <- c("tornado", class(dat)); class(datclin) <- c("tornado", class(datclin))
 attr(dat, "output_name") <- "value"; attr(datclin, "output_name") <- "value"
@@ -1083,30 +829,49 @@ library(ggplot2)
 library(patchwork)
 source("tornadoplot.R")
 if(hospplot) (rdtnaat_h <- ggplot_tornado(dat, baseline, title="Net Benefit of Ag-RDT\nversus NAAT, hospital setting") +
-                ylim(c(0,1.6)+
+                ylim(c(0,1.6))+
                        ylab("Value of Ag-RDT relative to NAAT \n(values >1 favor Ag-RDT)") +
-                       xlab("Parameter (range explored)") )
+                       xlab("Parameter (range explored)") + 
+                geom_hline(yintercept = 1, lty=3)
     # scale_y_log10(limits=c(0.5,5), breaks = c(0.5,1,2,4,8))
       ) else
       (rdtnaat_o <- ggplot_tornado(dat, baseline, title="Net Benefit of Ag-RDT\nversus NAAT, outpatient setting") +
-         ylim(c(0,1.6)+
+         ylim(c(0,2.2))+
                 ylab("") +
-                xlab("Parameter (range explored)") )
+                xlab("Parameter (range explored)") + 
+         geom_hline(yintercept = 1, lty=3)
          # scale_y_log10(limits=c(0.5,max(dat$value)), breaks = c(0.5,1,2,4,8,16,32))
        ) 
 if(hospplot) (rdtclin_h <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, hospital setting") + 
                 theme(legend.position = "none")+
                 ylab("Value of Ag-RDT relative to clinical judgment \n(values >1 favor Ag-RDT)") +
-                 xlab("Parameter (range explored)") 
+                 xlab("Parameter (range explored)") +
+                geom_hline(yintercept = 1, lty=3)
               ) else
       (rdtclin_o <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, outpatient setting") + theme(legend.position = "none") +
           ylab("") +
-          xlab("Parameter (range explored)") 
+          xlab("Parameter (range explored)") +
+         geom_hline(yintercept = 1, lty=3) 
           )
-#to get outpatient setting, modify hospplot and repeat above.
- rdtnaat_o + rdtnaat_h +   plot_layout(ncol = 1, heights = c(3,2))
- rdtclin_o + rdtclin_h +   plot_layout(ncol = 1, heights = c(2,2))
- 
+  #to get outpatient setting, modify hospplot and repeat above.
+ rdtnaat_o + theme(legend.position = c(0.25,0.15)) +
+ rdtnaat_h +   theme(legend.position = 'none') + 
+           plot_layout(ncol = 1, heights = c(5,2))
+ pdf(file = "DCA Fig4.pdf", width=9, height=9)
+ rdtnaat_o + theme(legend.position = c(0.25,0.15)) +
+   rdtnaat_h +   theme(legend.position = 'none') + 
+   plot_layout(ncol = 1, heights = c(5,2))
+    dev.off()
+
+      rdtclin_o + rdtclin_h + plot_layout(ncol = 1, heights = c(2,2))
+      pdf(file = "DCA Fig S6.pdf", width=9, height=9)
+        rdtclin_o + theme(legend.position = c(0.7,0.15)) +
+          rdtclin_h + theme(legend.position = 'none') +
+          plot_layout(ncol = 1, heights = c(4,2))
+        dev.off()
+
+# for caption:
+                
 if(hospplot) 
   { hi_benefit_clin_h <- NB(params = Nparamsclin)["RDT"]/ 
             NB(params = Nparamsclin)["clin"]
@@ -1125,234 +890,6 @@ lo_benefit_h <- NB(params = Rparams)["RDT"]/
   lo_benefit_o <- NB(params = Rparams)["RDT"]/ 
     NB(params = Rparams)["clin"] } 
  
-# pdf(file = "DCA fig5.pdf", width = 6.5, height = 9)
-# rdtnaat_o /
-#   rdtnaat_h / 
-#   rdtclin_h
-# dev.off()
-
- 
-##### find precise values wher Ag-RDT preferred in hospital #####
-resetparams <- make.params(hosp=T)
-resetparams$turnaroundTimeNAAT <- 2
-NB(resetparams)
-resetparams <- make.params(hosp=T)
-resetparams$sensitivityRDT_vsNAAT <- 0.85 **
-NB(resetparams)
-exp(-0.3*2.5)
- 
- ##### explore other dimensions #######
-
-
-resetparams <- make.params(); resetparams$clinicalDiagnosisDiscount <- 1
-vary1 <- "sensitivityClinician"
-vary2 <- "clinicalDiagnosisDiscount"
-range1 <- seq(0.5,0.95,by=0.05)
-range2 <- seq(0.5,1,by=0.05)
-collateresults <- twowayvary(vary1, range1, vary2, range2)
-par(mfrow=c(1,2), mar=c(4,4,3,1))
-plot(range1, collateresults[1,,which.min(range2<resetparams[[vary2]])], type='l', col=mycolors[1], 
-     main=paste0("Varying ",vary1), xlab=vary1, ylab="Net benefit", ylim=c(min(collateresults, na.rm=T), max(collateresults, na.rm=T)))
-lines(range1, collateresults[2,,which.min(range2<resetparams[[vary2]])], col=mycolors[2])
-lines(range1, collateresults[3,,which.min(range2<resetparams[[vary2]])], col=mycolors[3])
-# lines(range1, collateresults[4,,which.min(range2<resetparams[[vary2]])], col='orange')
-lines(range1, collateresults[5,,which.min(range2<resetparams[[vary2]])], col='black')
-plot(range2, collateresults[1,which.min(range1<resetparams[[vary1]]),], type='l', col=mycolors[1], 
-    main=paste0("Varying ",vary2), xlab=vary2, ylab="Net benefit", ylim=c(min(collateresults, na.rm=T), max(collateresults, na.rm=T)))
-lines(range2, collateresults[2,which.min(range1<resetparams[[vary1]]),], col=mycolors[2])
-lines(range2, collateresults[3,which.min(range1<resetparams[[vary1]]),], col=mycolors[3])
-# lines(range2, collateresults[4,which.min(range1<resetparams[[vary1]]),], col='orange')
-lines(range2, collateresults[5,which.min(range1<resetparams[[vary1]]),], col='black')
-legend(x = "bottomright", legend = c("NAAT","Ag-RDT","Clinical", "Treat all"),
-                     col=c(mycolors[1],mycolors[2],mycolors[3], 'black'), lty=1)
-                     
-
-
-# now varying turnaround time, clinical benefit decay
-resetparams <- make.params(); resetparams$clinicalDiagnosisDiscount <- 1
-vary1 <- "turnaroundTimeNAAT"
-range1 <- seq(0.25,7,by=0.25)
-collateresults <- twowayvary(p1 = vary1, r1 = range1, resetparams = resetparams)
-par(mfrow=c(1,2), mar=c(4,4,3,1))
-plot(range1, collateresults[1,,1], type='l', col=mycolors[1], 
-     main="", xlab="NAAT turnaround time, days", ylab="Net benefit", ylim=c(min(collateresults, na.rm=T), max(collateresults, na.rm=T)))
-lines(range1, collateresults[2,,1], col=mycolors[2])
-lines(range1, collateresults[3,,1], col=mycolors[3])
-lines(range1, collateresults[5,,1], col='black')
-
-vary1 <- "sensitivityRDT_vsNAAT"
-range1 <- seq(0.5,1,by=0.01)
-collateresults2 <- twowayvary(p1 = vary1, r1 = range1, resetparams = resetparams)
-plot(range1, collateresults2[1,,1], type='l', col=mycolors[1], 
-     main="", xlab="Sensitivty of Ag-RDT", ylab="Net benefit", ylim=c(min(collateresults, na.rm=T), max(collateresults, na.rm=T)))
-lines(range1, collateresults2[2,,1], col=mycolors[2])
-lines(range1, collateresults2[3,,1], col=mycolors[3])
-lines(range1, collateresults2[5,,1], col='black')
-legend(x = "bottomright", legend = c("NAAT","Ag-RDT","Clinical", "Treat all"),
-       col=c(mycolors[1],mycolors[2],mycolors[3], 'black'), lty=1)
-
-
-# transform to data frame for 3d plotting
-vary1 <- "turnaroundTimeNAAT"
-range1 <- seq(0.25,5,by=1)
-vary2 <- "sensitivityRDT_vsNAAT"
-range2 <- seq(0.5,1,by=0.05)
-collateresults <- twowayvary(vary1, range1, vary2, range2, resetparams = resetparams)
-dimnames(collateresults) <- list(Assay = c("NAAT","RDT","clinical, fixed", "clinical, flexible", "treat all"),
-                                 vary1 = range1,
-                                 vary2 = range2)
-require(reshape2)
-dfdata <- melt(collateresults)
-library(rgl)
-rgl.open()
-rgl.bg( sphere = F, fogtype = "none", color = "white",
-        back = "lines")
-plot3d(x = subset(dfdata, Assay=="NAAT")$vary1, y=subset(dfdata, Assay=="NAAT")$vary2, z=subset(dfdata, Assay=="NAAT")$value, type = 'l', col=mycolors[1],
-       xlab=vary1, ylab=vary2, zlab="Net benefit", xlim=range(range1), ylim=range(range2), zlim=range(dfdata$value))
-plot3d(x = subset(dfdata, Assay=="RDT")$vary1, y=subset(dfdata, Assay=="RDT")$vary2, z=subset(dfdata, Assay=="RDT")$value, type = 'l', col=mycolors[2], add = T)
-plot3d(x = subset(dfdata, Assay=="clinical, fixed")$vary1, y=subset(dfdata, Assay=="clinical, fixed")$vary2, 
-       z= subset(dfdata, Assay=="clinical, fixed")$value, type = 'l', col=mycolors[3], add = T)
-legend3d(x="bottomright",legend = c("NAAT","Ag-RDT","clinical"), pch=16, col=c(mycolors[1],mycolors[2],mycolors[3]))
-rgl.close()
-
-library(plotly)
-x <- list(title = vary1)
-y <- list(title = vary2)
-# fig1 <- plot_ly(x=range1, y=range2, z =collateresults[1,,], type='contour', contours=list(showlabels=T))
-# fig1 <- fig1 %>% colorbar(title="Net benefit") %>% layout(xaxis=x, yaxis=y, title="NAAT")
-# fig2 <- plot_ly(x=range1, y=range2, z =collateresults[2,,], type='contour', contours=list(showlabels=T))
-# fig2 <- fig2 %>% colorbar(title="Net benefit") %>% layout(xaxis=x, yaxis=y, title="RDT")
-# fig3 <- plot_ly(x=range1, y=range2, z =collateresults[3,,], type='contour', contours=list(showlabels=T))
-# fig3 <- fig3 %>% colorbar(title="Net benefit") %>% layout(xaxis=x, yaxis=y, title="Clinical judgment")
-
-# incremental NB contour plots:
-#NAAT vs RDT
-figa <- plot_ly(x=range2, y=range1, z =collateresults[1,,]- collateresults[2,,], type='contour', contours=list(showlabels=T))
-figa <- figa %>% colorbar(title="Net benefit") %>% layout(xaxis=y, yaxis=x, title="NAAT versus RDT")
-figa
-# RDT vs clinical (flexible)
-figb <- plot_ly(x=range2, y=range1, z =collateresults[1,,]- collateresults[4,,], type='contour', contours=list(showlabels=T))
-figb <- figb %>% colorbar(title="Net benefit") %>% layout(xaxis=y, yaxis=x, title="NAAT versus clinical")
-figb
-
-
-
-
-
-
-#   
-#   [How to account for error/imprecision in the clinician's calibration?]
-# 
-# [Or for RDT, account for there being some the clinician would judge so probable that they wouldn't do the RDT??]
-#   
-#   [For next piece: Perspective with multiple issues in decision curves (wo too much depth on any one), OR methods piece just on the baseline of DCA that is better than treat all/treat none and that some get treated regardless]
-#   
-  
-#   
-# #example for a specific threshold:
-# tprob <- 0.2
-# i <- which(x==tprob)
-#   cutoffNBs <- numeric(length(scores$score))
-#   for (j in 1:length(cutoffNBs))
-#   {
-#     cutoffNBs[j] <- NBdiscrete(scores$score[j], x[i])
-#   }
-#   scores$prevhalfcutoffs <- cutoffNBs
-#   library(ggplot2)
-#   ggplot(data=scores, aes(x=score, fill=factor(covid))) + 
-#     geom_histogram(alpha=0.5, position="identity", binwidth = 0.1) + 
-#     geom_line(aes(x=score, y=prevhalfcutoffs))
-#   
-#   
-#   choosescore <- numeric(length(x))
-#   considercutoffs <- seq(floor(min(scores$score)), ceiling(max(scores$score)), by = 0.1)
-#   for (i in 1:length(x))
-#   {
-#     cutoffNBs <- numeric(length(considercutoffs))
-#     for (j in 1:length(cutoffNBs))
-#     {
-#       cutoffNBs[j] <- NBdiscrete(considercutoffs[j], x[i])
-#     }
-#     choosescore[i] <- considercutoffs[which.max(cutoffNBs)] # account for uncertainty here somewhere?
-#   }
-#   
-#   # what score cutoff should be used for each threshold probability, to maximize net benefit?
-#   plot(x, choosescore)
-#   NBs <- numeric(length(x))
-#   for (i in 1:length(NBs)) NBs[i] <- NBdiscrete(cutoff = choosescore[i], thresholdprob = x[i])
-#   plot(x, NBs)
-#   
-#   
-#   plotDCA(prev=prev)
-#   plotDCA(prev=prev, plotclin = F)
-#   lines(x, NBs/nsim, col=mycolors[3])
-
-
-###### Model of clinician judgment #########
-
-# If a clinician knows what the above plot looks like, they can choose the point which 
-# has the PPV that they want.
-## -- or, for more complicated NB model, can choose the cutoff that maximizes NB.
-
-# point sensitivityClinician and specificityClinician -> binormal model of ROC curve -> 
-# For each cutoff and prev, can calcuate number of TPs and number of FPs ->
-# within NB model, can choose the cutoff that maximizes NB for a given set of params, and 
-# use the corresponding sensitivityClinician and specificityClinician in the overall NB calculations.
-
-
-# clinician_options <- function(params, histplot=F, cdfplot=F, s = 100)
-# {
-#   # Assume clinicians evaluate patients based on clinicial features (incl symptoms, exposure risks, and potential for alternative diagnoses) and could hypothetically rank patients on some arbitary "liklihood of COVID" scale. This ranking may depend on individual-level exposure risk but will be independent of the general prevalence of COVID in the population. In keeping with common approaches to ROC analysis, assume that patients with COVID have clinical-judgment liklihoods normally distributed as $N(m_p,\inc_p)$, and patients without COVID follow another normal distribution $N(m_n, \inc_n)$. 
-#   m_p <- 0 # arbitrary mean likelihood of positives
-#   sd_p <- 1 # also arbitrary
-#   sensquantile <- qnorm(p = params$sensitivityClinician, mean = 0, sd=1, lower.tail = F)
-#   
-#   # so we want sensquantile of the first distribution, to equal specquantile of the second (lowertail)
-#   sd_n <- sd_p # assuming equal for now, but can adjust.
-#   # Now find the mean for the negatives:  
-#   # m_n + sd_n * qnorm(p = 0.5, mean=0, sd=1) = sensquantile
-#   m_n = sensquantile - sd_n * qnorm(p = params$specificityClinician, mean=0, sd=1)
-#   
-#   if(histplot) {
-#     # Plot the distributions, at two levels of prevalence:
-#     plothist <- function(prev, nsim, title)
-#     { L_p <- rnorm(n = nsim*prev, mean = m_p, sd = sd_p)
-#     L_n <- rnorm(n = nsim*(1-prev), mean = m_n, sd = sd_n)
-#     hist(L_n, freq = T, breaks=seq(-6,6,by=0.1), main=title, xlab="arbitrary ranking scale")
-#     hist(L_p, freq = T, add=T, col=mycolors[3], breaks=seq(-6,6,by=0.1) )
-#     }
-#     par(mfrow=c(1,2))
-#     plothist(prev = 0.1, nsim = 100000, title="10% prevalence")
-#     plothist(prev = 0.4, nsim = 100000, title="40% prevalence")
-#   }
-#   prev <- 0.1
-#   nsim <- 100000
-#   L_p <- rnorm(n = nsim*prev, mean = m_p, sd = sd_p)
-#   L_n <- rnorm(n = nsim*(1-prev), mean = m_n, sd = sd_n)
-#   if(cdfplot){
-#     # cdf plot illustrates overlap  
-#     par(mfrow=c(1,1))
-#     plot(ecdf(x = L_p), xlab="Diagnostic threshold on arbitrary scale", ylab="Proportion classified as COVID-negative")
-#     lines(ecdf(x = L_n), col=mycolors[3])
-#     abline(v=0, lty=2)
-#     # abline(v=-1, lty=3, col='gray')
-#     # abline(v=0.5, lty=3, col='gray')
-#     legend("bottomright", c("Negatives","Positives","Threshold used in fixed-cutoff model"), lty=c(1,1,2), col=c(mycolors[1],"black","black"))
-#   }  
-#   
-#   cutoffs <- seq(floor(min(L_n)*s)/s,ceiling(max(L_p)*s)/s, by=1/s)
-#   sns <- sps <- numeric(length(cutoffs))
-#   for (i in 1:length(cutoffs))
-#   {
-#     sns[i] <- mean(L_p>cutoffs[i])
-#     sps[i] <- mean(L_n<cutoffs[i])
-#   }
-#   
-#   return(rbind(sns, sps))
-# }
-# 
-# clinician_options(make.params(), s=10, histplot = T, cdfplot = T)  
-# 
 
 
 

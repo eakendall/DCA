@@ -99,8 +99,8 @@ plotDCA <- function(prev=0.4, sens=0.9, spec=0.5, rsens=0.7, rspec=0.99, psens=0
 }
 
 par(mfrow=c(1,2))
-plotDCA(prev=0.4, sens=0.9, spec=0.5, rsens=0.7, rspec=0.99, psens=0.9, pspec=0.99, ymax=0.5, plotlegend = F, title="Hospitalized patients")
-plotDCA(prev=0.1, sens=0.5, spec=0.8, rsens=0.7, rspec=0.98, psens=0.9, pspec=0.98, ymax=0.5, title="Mildly symptomatic")
+plotDCA(prev=0.4, sens=0.9, spec=0.5, rsens=0.7, rspec=0.995, psens=0.9, pspec=0.995, ymax=0.5, plotlegend = F, title="Hospitalized patients")
+plotDCA(prev=0.1, sens=0.5, spec=0.8, rsens=0.7, rspec=0.995, psens=0.9, pspec=0.995, ymax=0.5, title="Mildly symptomatic patients")
 
 
 ```
@@ -141,19 +141,27 @@ a. Public health versus clinical objectives
 
 ```{r}
 # infectiousness:
-n<-1e5
+npts<-1e5 #arbitrary
+
+presx <- 0.2
+si <- 6
+si_sd <- 4
+rt <- 1
+f <- 0.5 #contact notification efficacy
+sxonsetday <- 2
+duration <- 10
+
+# daily decline
 
 library(rriskDistributions)
-weibpar <- get.weibull.par(p=c(0, 0.2, 0.99), q=c(0,2,12))
-casetransmits <- rweibull(n = n, shape = weibpar[1], scale = weibpar[2]) - 2
+weibpar <- get.weibull.par(p=c(0, presx, 0.99), q=c(0,sxonsetday,sxonsetday+duration))
+casetransmits <- rweibull(n = npts, shape = weibpar[1], scale = weibpar[2]) - sxonsetday
 # will shift this left by two to get timing relative to symptom onset.
 
 # serial interval: mean 6 days, SD 4 days, gamma:
-serial <- rgamma(shape = 6^2/4, rate = 6/4, n = n)
+serial <- rgamma(shape = si^2/si_sd, rate = si/si_sd, n = npts)
 contactonset <- casetransmits + serial
-contacttransmits <- contactonset <- casetransmits + serial + sample(casetransmits, n, T)
-#mean 6.3, SD = 4.2 days (Bi)
-#The serial interval was estimated to have a mean of 5.8 days (95% confidence interval (CI), 4.8–6.8 days) and a median of 5.2 days (95% CI, 4.1–6.4 days) based on a fitted gamma distribution (He)
+contacttransmits <- contactonset <- casetransmits + serial + sample(casetransmits, npts, T)
 
 par(mfrow=c(1,1))
 # hist(casetransmits, xlim=c(-3,30), freq = F, col="blue")
@@ -167,7 +175,7 @@ legend(x="topright", legend = c("Transmission from case", "Transmission from the
 # Fit log-gnormal distribution of viral qty, between 10^2 and 10^8 copies. 
 # (https://www.bmj.com/content/bmj/369/bmj.m1443.full.pdf)
 normpar <- get.norm.par(p = c(0.025, 0.975), q = c(3,8))
-logvirus <- rnorm(n = n, mean=normpar[1], sd = normpar[2])
+logvirus <- rnorm(n = npts, mean=normpar[1], sd = normpar[2])
 quantile(logvirus, c(0.1,0.3))
 
 # and model infectiousness as proportional to probability of positive culture: 
@@ -176,6 +184,7 @@ quantile(logvirus, c(0.1,0.3))
 # and ~ linear
 infectivity <- pmax(0, pmin(logvirus-2, 8-2)/(8-2))
 infectivity <- infectivity/mean(infectivity)
+hist(infectivity)
 
 # Other assumptions re transmission
 Rt <- 1
