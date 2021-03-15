@@ -16,7 +16,7 @@ make.params <- function(hosp=T)
   params <- within(params, {
     #weights
     I_T <- 1 # value of preventing transmission from a case
-    clinicalVsTransmissionBenefit <- ifelse(hosp, 1, 0.03) # value of preventing mortality/morbidity, in units of T
+    clinicalVsTransmissionBenefit <- ifelse(hosp, 2, 0.06) # value of preventing mortality/morbidity, in units of T
     # outpatient: 6% of all diagnoses hospitalized (supplement); assume half are already in hospital when tested.
     # Then, ~30x lower risk of severe illness in symptomatic outpatient versus hospitalized patient. Assume outpatient treatment for prevention has similar % morbidity mortality impact as inpatient mgme once sick (Mab trials, reduced for limited uptake).
 
@@ -42,7 +42,7 @@ make.params <- function(hosp=T)
     v1=3; v2=8 #95% CI of log10 viral load
     minimumInfectiousLogVirus=3 #minimum logvirus at which infectivity begins
     infectivityScale = 1 # 1 = log-linear -- how skewed is the infectivity distribution, in relation to viral load?
-    firstGenerationTransmissionWeight <- 0.25 # how much do you value preventing transmission to immediate contacts,
+    firstGenerationTransmissionWeight <- 0.2 # how much do you value preventing transmission to immediate contacts,
 
     # timing
     medianPresentationDay <- ifelse(hosp, 5, 3.5)
@@ -99,7 +99,7 @@ get_diff_vectors <- function(x, y) {
 #' @return proportion of cases detected, proportion of transmission prevented (after weighting by generation).
 
 mapTransmissions <- function(params,
-                            npts = 1e5, #arbitrary sim size
+                            npts = 1e6, #arbitrary sim size
                             plots=T, plotclin=F) 
 {  
   if(missing(params)) params <- make.params()
@@ -122,24 +122,24 @@ mapTransmissions <- function(params,
   # Will model variation in infectiousness at diagnosis, and assume that corresponds to variation in avertable transmission -- either because the low ones were always low so weren't very infectious and don't ahve many infected contacts, or because you're cathcing them late when they aren't infectious and their contacts' infectious time has mostly passed.)
   logvirus <- rnorm(n = npts, mean=normpar[1], sd = normpar[2]) # at symptom onset (affects detection, correlated with peak)
   
-  if(plots)
-  {
-    print(
-      ggplot(data.frame(logvirus)) + geom_density(aes(x=logvirus), lwd=0.5) + 
-      geom_vline(xintercept=min(logvirus[Pos_NAAT_onset==1]), lty=2, color=mycolors[1], lwd=0.5) + 
-      geom_vline(xintercept=min(logvirus[Pos_RDT_onset==1]), lty=3, color=mycolors[2], lwd=0.5) + 
-      xlab("Log10 virus at symptom onset") +
-      ylab("Proportion of patient population") +
-      xlim(1,10)+
-      theme_minimal(base_size = 12) +
-      scale_y_continuous(breaks = NULL) + 
-      coord_flip() + 
-      annotate(geom="text", x=min(logvirus[Pos_NAAT_onset==1])+0.1, y=0, 
-               label="Limit of NAAT detection", color=mycolors[1], hjust=0, vjust=0, size=4) + 
-      annotate(geom="text", x=min(logvirus[Pos_RDT_onset==1])+0.1, y=0, 
-               label="Limit of Ag-RDT detection", color=mycolors[2], hjust=0, vjust=0, size=4) 
-    )
-  }
+  # if(plots)
+  # {
+    # print(
+    #   ggplot(data.frame(logvirus)) + geom_density(aes(x=logvirus), lwd=0.5) + 
+    #   geom_vline(xintercept=min(logvirus[Pos_NAAT_onset==1]), lty=2, color=mycolors[1], lwd=0.5) + 
+    #   geom_vline(xintercept=min(logvirus[Pos_RDT_onset==1]), lty=3, color=mycolors[2], lwd=0.5) + 
+    #   xlab("Log10 virus at symptom onset") +
+    #   ylab("Proportion of patient population") +
+    #   xlim(1,10)+
+    #   theme_minimal(base_size = 12) +
+    #   scale_y_continuous(breaks = NULL) + 
+    #   coord_flip() + 
+    #   annotate(geom="text", x=min(logvirus[Pos_NAAT_onset==1])+0.1, y=0, 
+    #            label="Limit of NAAT detection", color=mycolors[1], hjust=0, vjust=0, size=4) + 
+    #   annotate(geom="text", x=min(logvirus[Pos_RDT_onset==1])+0.1, y=0, 
+    #            label="Limit of Ag-RDT detection", color=mycolors[2], hjust=0, vjust=0, size=4) 
+    # )
+  # }
 
   # infectivity
   
@@ -234,6 +234,8 @@ mapTransmissions <- function(params,
   caseevents$Avertable_clin <- caseevents$value > presentationDay + 0
   caseevents$Averted_clin <- caseevents$Avertable_clin * rbinom(n=nrow(caseevents), # incorporating test sensitivity and isolation effectiveness
                                                                size=1, prob = isolationOfKnownCase*caseevents$Pos_clin*clinicalDiagnosisDiscount)
+  caseevents$Averted_treatall <- caseevents$Avertable_clin * rbinom(n=nrow(caseevents), # incorporating test sensitivity and isolation effectiveness
+                                                                size=1, prob = isolationOfKnownCase*clinicalDiagnosisDiscount)
   
   ## Contact trnasmission events timing distribution:
   
@@ -255,10 +257,14 @@ mapTransmissions <- function(params,
   caseevents$contactTransmits_NAAT <- caseevents$Transmits_NAAT & !caseevents$contactTransmissionAverted_NAAT
   
   caseevents$Transmits_clin <- 1 - caseevents$Averted_clin
+  caseevents$Transmits_treatall <- 1 - caseevents$Averted_treatall
   caseevents$contactTransmissionAvertable_clin <- caseevents$Transmits_clin & caseevents$contacttime >presentationDay + 0
   caseevents$contactTransmissionAverted_clin <- caseevents$contactTransmissionAvertable_clin * rbinom(n=nrow(caseevents), 
                                                                                                       size=1, prob = isolationOfContacts*Pos_clin*clinicalDiagnosisDiscount)
+  caseevents$contactTransmissionAverted_treatall <- caseevents$contactTransmissionAvertable_clin * rbinom(n=nrow(caseevents), 
+                                                                                                      size=1, prob = isolationOfContacts*clinicalDiagnosisDiscount)
   caseevents$contactTransmits_clin <- caseevents$Transmits_clin & !caseevents$contactTransmissionAverted_clin
+  caseevents$contactTransmits_treatall <- caseevents$Transmits_treatall & !caseevents$contactTransmissionAverted_treatall
   
   # casetransmits are timing, caseTransmissions are indexes fo all events (some repeated), 
    # caseTransmits_X are indexed for events that occur with a given test (subset of caseTransmissions)
@@ -271,7 +277,6 @@ mapTransmissions <- function(params,
     "Prevented with either test",
     "Prevented with Ag-RDT only"))
 
-  if(plots){
     
     # by timing of transmission, cases
     arranged <- caseevents %>% 
@@ -322,27 +327,29 @@ mapTransmissions <- function(params,
       dplyr::mutate(rn = row_number())
   
     
-    colors <- c(
+    if(plots){
+      
+      colors <- c(
       # "Any/All" = mycolors[5],
                 "NAAT" = mycolors[1], "Ag-RDT" = mycolors[2], 
                 "Clinical" = mycolors[3])
-    linetypes <- c("Any result" = "dotted", 
-                "Positive result" = 'solid')
+    linetypes <- c("All results" = "dotted", 
+                "Positive results" = 'solid')
     
     xmax <- 25
     (detection <- ggplot() +
       xlim(-3,xmax) + 
-        geom_step(data=detected_clin[seq(1,nrow(detected_clin), by=npts/1000),], aes(x=presentationDay, y=rn, color='Clinical', linetype='Positive result'),lwd=0.8) +
-        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay, y=rn, color="Clinical", linetype="Any result"),lwd=0.8) +
-        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Any result"),lwd=0.8) +
-      geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color="NAAT", linetype="Any result"),lwd=0.8) +
-      geom_step(data=detected_RDT[seq(1,nrow(detected_RDT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Positive result"),lwd=0.8) +
-      geom_step(data=detected_NAAT[seq(1,nrow(detected_NAAT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color='NAAT', linetype="Positive result"),lwd=0.8)  +
+        geom_step(data=detected_clin[seq(1,nrow(detected_clin), by=npts/1000),], aes(x=presentationDay, y=rn, color='Clinical', linetype='Positive results'),lwd=0.8) +
+        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay, y=rn, color="Clinical", linetype="All results"),lwd=0.8) +
+        geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="All results"),lwd=0.8) +
+      geom_step(data=tested[seq(1,nrow(tested), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color="NAAT", linetype="All results"),lwd=0.8) +
+      geom_step(data=detected_RDT[seq(1,nrow(detected_RDT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeRDT, y=rn, color="Ag-RDT", linetype="Positive results"),lwd=0.8) +
+      geom_step(data=detected_NAAT[seq(1,nrow(detected_NAAT), by=npts/1000),], aes(x=presentationDay+turnaroundTimeNAAT, y=rn, color='NAAT', linetype="Positive results"),lwd=0.8)  +
       labs(x = "Days from symptom onset",
-           color = "Diagnostic approach", linetype="Type of diagnostic\nresult available") +
+           color = "Diagnostic approach", linetype="Cumulative results\nfrom patients w/COVID") +
         scale_color_manual(values = c(mycolors[2], mycolors[1], mycolors[3]), breaks = c("Ag-RDT", "NAAT", "Clinical")) + 
-      scale_linetype_manual(values = c("dotted", "solid"), breaks = c("Any result", "Positive result")) + 
-      scale_y_continuous(name = "Cumulative evaluations completed or true-positive results,\namong 100 million simulated COVID-19 patients", 
+      scale_linetype_manual(values = c("dotted", "solid"), breaks = c("All results", "Positive results")) + 
+      scale_y_continuous(name = "Cumulative test results received,\namong 1,000,000 simulated patients with COVID-19", 
                          breaks = npts*c(0,0.25,0.5,0.75,1), 
                          labels = c("0","250k","500k","750k","1000k")) + 
         theme_bw()+
@@ -359,25 +366,25 @@ mapTransmissions <- function(params,
     )
     
     
-    # ## for Overview figure, timing of transmission:
-    # 
-    par(mfrow=c(1,1), mar=c(3,2,1,1), oma=c(0,0,0,0))
-    plot(NA, xlab="Days since symptom onset",
-             xlim=c(-3,25), yaxt='n', ylab="",
-         ylim=c(0,4.5e3))
-    rect(xleft = 3, xright = 30, ybottom = 0, ytop = 4.5e4, col = rgb(0.5,0.5,0.5,1/4), border = NA)
-    rect(xleft = 6, xright = 30, ybottom = 0, ytop = 4.5e4, col = rgb(0.5,0.5,0.5,1/4), border=NA)
-    lines(names(allcase), allcase, col=mycolors[5], lwd=2)
-    lines(names(allcontact), 0.25*allcontact, col=mycolors[4], lwd=2)
-    text(5,4.2e4, "From index cases", col=mycolors[5])
-    text(16,2.75e4, "From direct contacts", col=mycolors[4])
-    segments(x0 = 0, x1=0, y0=0, y1 = allcase['0'], lty=2, lwd=1.5)
-    text(-0.8,500, "Symptom onset", srt=90, adj=0)
-    segments(x0 = 3, x1=3, y0=0, y1 = allcase['3'], lty=3, lwd=1.5)
-    # text(2.2,500, "Early diagnosis", srt=90, adj=0)
-    segments(x0 = 6, x1=6, y0=0, y1 = allcase['6'], lty=3, lwd=1.5)
-    # text(5.2,500, "Later diagnosis", srt=90, adj = 0)
-    mtext("Days since symptom onset", side = 1, line=2)
+    # # ## for Overview figure, timing of transmission:
+    # # 
+    # par(mfrow=c(1,1), mar=c(3,2,1,1), oma=c(0,0,0,0))
+    # plot(NA, xlab="Days since symptom onset",
+    #          xlim=c(-3,25), yaxt='n', ylab="",
+    #      ylim=c(0,4.5e3))
+    # rect(xleft = 3, xright = 30, ybottom = 0, ytop = 4.5e4, col = rgb(0.5,0.5,0.5,1/4), border = NA)
+    # rect(xleft = 6, xright = 30, ybottom = 0, ytop = 4.5e4, col = rgb(0.5,0.5,0.5,1/4), border=NA)
+    # lines(names(allcase), allcase, col=mycolors[5], lwd=2)
+    # lines(names(allcontact), 0.25*allcontact, col=mycolors[4], lwd=2)
+    # text(5,4.2e4, "From index cases", col=mycolors[5])
+    # text(16,2.75e4, "From direct contacts", col=mycolors[4])
+    # segments(x0 = 0, x1=0, y0=0, y1 = allcase['0'], lty=2, lwd=1.5)
+    # text(-0.8,500, "Symptom onset", srt=90, adj=0)
+    # segments(x0 = 3, x1=3, y0=0, y1 = allcase['3'], lty=3, lwd=1.5)
+    # # text(2.2,500, "Early diagnosis", srt=90, adj=0)
+    # segments(x0 = 6, x1=6, y0=0, y1 = allcase['6'], lty=3, lwd=1.5)
+    # # text(5.2,500, "Later diagnosis", srt=90, adj = 0)
+    # mtext("Days since symptom onset", side = 1, line=2)
   }
   
   transmission_benefit_RDT <- 1 - 
@@ -392,45 +399,104 @@ mapTransmissions <- function(params,
     ( firstGenerationTransmissionWeight*mean(caseevents$Transmits_clin) + 
         (1-firstGenerationTransmissionWeight)*mean(caseevents$contactTransmits_clin) ) 
   
+  transmission_benefit_treatall <- 1 - 
+    ( firstGenerationTransmissionWeight*mean(caseevents$Transmits_treatall) + 
+        (1-firstGenerationTransmissionWeight)*mean(caseevents$contactTransmits_treatall) ) 
+  
   # clinical benefit, exponential decay
   clinical_benefit_RDT <- mean(allcases$Pos_RDT * exp(-(allcases$presentationDay + turnaroundTimeRDT) * dailyDecayClinicalBenefit))
   clinical_benefit_NAAT <- mean(allcases$Pos_NAAT * exp(-(allcases$presentationDay + turnaroundTimeNAAT) * dailyDecayClinicalBenefit))
   clinical_benefit_clin <- mean(allcases$Pos_clin * exp(-(allcases$presentationDay) * dailyDecayClinicalBenefit)) *clinicalDiagnosisDiscount
+  clinical_benefit_treatall <- mean(exp(-(allcases$presentationDay) * dailyDecayClinicalBenefit)) *clinicalDiagnosisDiscount
   
-  return(list("NAAT"=transmission_benefit_NAAT, "RDT"=transmission_benefit_RDT, "clin"=transmission_benefit_clin,
+  return(list(# transmission reduction after g1 weighting:
+              "NAAT"=transmission_benefit_NAAT, "RDT"=transmission_benefit_RDT, "clin"=transmission_benefit_clin,
+                "treatall"=transmission_benefit_treatall,
+              # reduction in avertable M&M 
               "NAATclinical"=clinical_benefit_NAAT, "RDTclinical"=clinical_benefit_RDT, "clinclinical"=clinical_benefit_clin,
+                "treatallclinical"=clinical_benefit_treatall,
+              # proportion of cases detected
               "NAATdetection"=mean(Pos_NAAT), "RDTdetection"=mean(Pos_RDT), "clindetection"=mean(Pos_clin),
+              # proportion of transmission generated by those who are detected
               "NAATpeakinf" = sum(infectivity[Pos_NAAT==1])/sum(infectivity),
               "RDTpeakinf" = sum(infectivity[Pos_RDT==1])/sum(infectivity), 
               "clinpeakinf" = sum(infectivity[Pos_clin==1])/sum(infectivity),
-              "NAATinf" = sum(infectivity[Pos_NAAT==1])/sum(infectivity),
-              "RDTinf" = sum(infectivity[Pos_RDT==1])/sum(infectivity), 
-              "clininf" = sum(infectivity[Pos_clin==1])/sum(infectivity),
+              # proportion of future transmission (after clinical presentation) generated by those who are detected
               "NAATfuturetrans" = sum(subset(caseevents, Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
               "RDTfuturetrans" = sum(subset(caseevents, Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
               "clinfuturetrans" = sum(subset(caseevents, Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "NAATavertable" = sum(subset(caseevents, Avertable_NAAT==1 & Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "RDTavertable" = sum(subset(caseevents, Avertable_RDT==1 & Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "clinavertable" = sum(subset(caseevents, Avertable_clin==1 & Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
-              "NAATcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_NAAT==1 & Pos_NAAT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
-              "RDTcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_RDT==1 & Pos_RDT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
-              "clincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
-          # allavertable: of all transmission events, which occurred after a positive test resulted
+    #               "NAATavertable" = sum(subset(caseevents, Avertable_NAAT==1 & Pos_NAAT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+    #               "RDTavertable" = sum(subset(caseevents, Avertable_RDT==1 & Pos_RDT==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+    #               "clinavertable" = sum(subset(caseevents, Avertable_clin==1 & Pos_clin==1)$Avertable_clin)/sum(caseevents$Avertable_clin),
+    #               "NAATcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_NAAT==1 & Pos_NAAT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+    #               "RDTcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_RDT==1 & Pos_RDT==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+    #               "clincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/sum(caseevents$contactTransmissionAvertable_clin),
+              # allavertable: of all (case) transmission events, which occurred after a positive test resulted
               "allNAATavertable" = sum(subset(caseevents, Avertable_NAAT==1 & Pos_NAAT==1)$Avertable_clin)/nrow(caseevents),
               "allRDTavertable" = sum(subset(caseevents, Avertable_RDT==1 & Pos_RDT==1)$Avertable_clin)/nrow(caseevents),
               "allclinavertable" = sum(subset(caseevents, Avertable_clin==1 & Pos_clin==1)$Avertable_clin)/nrow(caseevents),
+              # of all (contact) transmission events, which occurred after a positive test resulted
               "allNAATcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_NAAT==1 & Pos_NAAT==1)$contactTransmissionAvertable_clin)/nrow(caseevents),
               "allRDTcontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_RDT==1 & Pos_RDT==1)$contactTransmissionAvertable_clin)/nrow(caseevents),
-              "allclincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/nrow(caseevents) 
+              "allclincontactavertable" = sum(subset(caseevents, contactTransmissionAvertable_clin==1 & Pos_clin==1)$contactTransmissionAvertable_clin)/nrow(caseevents), 
+              # split out T1j and T2j separately:    
+              "casetransRDT" = mean(caseevents$Transmits_RDT), 
+              "casetransNAAT" = mean(caseevents$Transmits_NAAT),
+              "contacttransRDT" = mean(caseevents$contactTransmits_RDT),
+              "contacttransNAAT" = mean(caseevents$contactTransmits_NAAT)
+              
               
               ) ) 
   })
   
 }
 
-mapTransmissions(params = make.params(hosp=F), plots=T, npts=1e6)
-mapTransmissions(params = make.params(hosp=T), plots=T, npts=1e6)
 
+(mo <- mapTransmissions(params = make.params(hosp=F), plots=T, npts=1e6))
+(mh <- mapTransmissions(params = make.params(hosp=T), plots=T, npts=1e6))
+
+mo$RDTdetection
+mo$RDTfuturetrans
+
+mo$RDT
+mo$NAAT
+mo$clin
+
+# # Supplemental results, individual components
+# (1-mh$casetransRDT)*1000
+# (1-mo$casetransRDT)*1000
+# (1-mh$casetransNAAT)*1000
+# (1-mo$casetransNAAT)*1000
+# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransRDT)*1000
+# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransRDT)*1000
+# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransNAAT)*1000
+# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransNAAT)*1000
+# 
+# (1-0.1)*(1-spec$NAAT) * 1000
+# (1-0.1)*(1-spec$RDT) * 1000
+# (1-0.4)*(1-spec$NAAT) * 1000
+# (1-0.4)*(1-spec$RDT) * 1000
+# 
+# 1000 * mh$NAATclinical * 0.04
+# 1000 * mo$NAATclinical * 0.04/30
+# 1000 * mh$RDTclinical * 0.04
+# 1000 * mo$RDTclinical * 0.04/30
+# 
+# # stochastic variability and sample size
+# size <- 1e6
+# o1 <- o2 <- o3 <- o4 <- numeric(10)
+# for (i in 1:10)
+#   o1[i] <- mapTransmissions(params = make.params(hosp=T), plots=F, plotclin = F, npts=size)$RDT
+# summary(o1)
+# for (i in 1:10)
+#   o2[i] <- mapTransmissions(params = make.params(hosp=T), plots=F, plotclin = F, npts=size)$NAAT
+# summary(o2)
+# for (i in 1:10)
+#   o3[i] <- mapTransmissions(params = make.params(hosp=T), plots=F, plotclin = F, npts=size)$RDTclinical
+# summary(o3)
+# for (i in 1:10)
+#   o4[i] <- mapTransmissions(params = make.params(hosp=T), plots=F, plotclin = F, npts=size)$NAATclinical
+# summary(o4)
 
 
 ##### Calculate Net Benefit with modified formula account for time-sensitivty, diagnostic-associated infectivity  ######
@@ -440,46 +506,34 @@ mapTransmissions(params = make.params(hosp=T), plots=T, npts=1e6)
 
 # get the net benefit for a single set of parameters
 # the value calculated is the average across the cases that are detected, or the average across all cases? Need to modify to be those detected. 
-NB <- function(params)
+NB <- function(params, npts=1e6)
 {
   #need to base this on the proportion actually detected, after accounting for delays. mapTransmissions will account for the lack of trasmission benefit, but we also need to track who's detected at all and gets clinical benefit.
   
     with(params, 
        {   
-         mt <- mapTransmissions(params, plots = F)
+         mt <- mapTransmissions(params, plots = F, plotclin = F, npts = npts)
          
-         trans <- mt[c("NAAT","RDT","clin")]
-         clinical <- mt[c("NAATclinical" ,"RDTclinical", "clinclinical")]
-         TAT <- list(NAAT = turnaroundTimeNAAT, RDT = turnaroundTimeRDT, clin=0)
-        sens <- list(NAAT = mt$NAATdetection, RDT=mt$RDTdetection, clin=mt$clindetection)
-        spec <- list(NAAT=spec_NAAT, RDT = specificityRDT, clin=specificityClinician)
+         trans <- mt[c("NAAT","RDT","clin","treatall")] # transmission benefit, proportion of all transmission prevented, weighted by g1 and 1-g1
+         clinical <- mt[c("NAATclinical" ,"RDTclinical", "clinclinical","treatall")] # mean of (detected)*exponential decay, not yet weighted by c
+        sens <- list(NAAT = mt$NAATdetection, RDT=mt$RDTdetection, clin=mt$clindetection, treatall=1) # proportion detected at time of clinical presentation
+        spec <- list(NAAT=spec_NAAT, RDT = specificityRDT, clin=specificityClinician, treatall=0)
       
-        # note that trans is a proportion of transmission prevented among all patients, not only those detected. 
-        # So we can divide by sensitivity to get transmission prevented per detection. 
-        transaverted <- as.list(mapply(function(a,b) a/b, trans, sens))
-          
-        clinaverted <- as.list(mapply(function(a,b) a/b, clinical, sens))
-        
-        # already accounted for clinical diagnosis discount in maptransmission
+        # # already accounted for clinical diagnosis discount effects on both prevented transmission and clinical benefits, in maptransmission
 
-                # now combine all sources of TP benefit, and discount action in response to clinical decision
-        V_TP <- (mapply(function(x,w) I_T *
-                          ( x + w)  / 
-                          (1+clinicalVsTransmissionBenefit), # normalizing so that one full TP get a 1 on both NB scales, 
-                      x=transaverted, w = clinaverted)) #already accounted for clinical diagnosis discounted in clin detection
+        # now combine all sources of TP benefit, and discount action in response to clinical decision
+        # 
+        V_TP <- (mapply(function(x,w,z,v) I_T *( # normalizing constant
+                          ( x + clinicalVsTransmissionBenefit*w)  / 
+                          ((1-presx)*(isolationOfKnownCase)) - 
+                          z * falseDiagnosisHarm* v), # normalizing so that one full TP get a 1 on both NB scales, and so that we're in units of avertible transmission
+                      x=trans, w = clinical, z = sens, v=c(1,1,clinicalDiagnosisDiscount, clinicalDiagnosisDiscount))) #already accounted for clinical diagnosis discount in clin detection
         
-        V_FP <-  I_T * falseDiagnosisHarm * c(1,1,clinicalDiagnosisDiscount)
+        V_FP <-  I_T * falseDiagnosisHarm * c(1,1,clinicalDiagnosisDiscount, clinicalDiagnosisDiscount) * (1-unlist(spec))
         #( (-c_F*clinicalVsTransmissionBenefit ) - (n*isolationOfContacts+1)*i_F)
         # removed factor (1+clinicalVsTransmissionBenefit), to normalize to NB_simple
         
-        NB <- prev*V_TP*unlist(sens) - (1-prev)*V_FP*(1-unlist(spec))
-        
-        NB <- append(NB, rep(NA,2))
-        
-  
-        # treat all, with clinical discount
-        NB[5] <- prev* (I_T * ( (transaverted$clin + clinaverted$clin))) / (1+clinicalVsTransmissionBenefit )- 
-          (1-prev)*(I_T * falseDiagnosisHarm)*clinicalDiagnosisDiscount
+        NB <- prev*V_TP - (1-prev)*V_FP
         
       return(NB)
   })
@@ -489,7 +543,8 @@ NB(params = make.params(hosp=F))
 NB(params = make.params(hosp=T))
 
 twowayvary <- function(p1, r1, p2=NA, r2=NA, 
-                       resetparams # change if needed, for any that will be fixed at a nondefault value
+                       resetparams,
+                       npts=1e5# change if needed, for any that will be fixed at a nondefault value
 )
 {
   # decide which parameters will vary and over what range
@@ -498,7 +553,7 @@ twowayvary <- function(p1, r1, p2=NA, r2=NA,
   range1 <- r1
   vary2 <- p2
   range2 <- r2 
-  collateresults <- array(NA, dim=c(5, length(range1), ifelse(is.na(vary2), 1, length(range2))))
+  collateresults <- array(NA, dim=c(4, length(range1), ifelse(is.na(vary2), 1, length(range2))))
   if(!is.na(vary1)) 
     for (set1 in 1:length(range1))
     {
@@ -507,8 +562,8 @@ twowayvary <- function(p1, r1, p2=NA, r2=NA,
       if(!is.na(vary2)) {
         for (set2 in 1:length(range2))
         {  params[[vary2]] <- range2[set2] 
-        collateresults[,set1,set2] <- NB(params)
-        }} else collateresults[,set1,1] <- NB(params)
+        collateresults[,set1,set2] <- NB(params, npts)
+        }} else collateresults[,set1,1] <- NB(params, npts)
     }
   return(collateresults)
 }
@@ -520,19 +575,19 @@ vary1 <- "falseDiagnosisHarm"
 # if we want probability threshold pt to range from 0 to 1, then 
 # pt = falseDiagnosisHarm*(1-pt)
 pt <- seq(0.001,0.991,by=0.03)
-range1 <- pt/(1-pt)
+range1 <- pt#/(1-pt)
 
 #hospital
 probthreshold <- twowayvary(vary1, range1) # standard param values
-altparams <- make.params(); altparams$clinicalDiagnosisDiscount <- 1
+altparams <- make.params(hosp=T); altparams$clinicalDiagnosisDiscount <- 1
 probthreshold2 <- twowayvary(vary1, range1, resetparams = altparams)
 altparams_sens <- altparams_tat <- altparams_tat3 <- altparams
 altparams_sens$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
-altparams_tat$turnaroundTimeNAAT <- 2 # for acute infection, 90% in Kruger, 95% in Igloi
-altparams_tat3$turnaroundTimeNAAT <- 3 # for acute infection, 90% in Kruger, 95% in Igloi
+altparams_tat$turnaroundTimeNAAT <- 2
+altparams_tat3$turnaroundTimeNAAT <- 3
 probthreshold_sens <- twowayvary(vary1, range1, resetparams = altparams_sens) # standard param values
-probthreshold_tat <- twowayvary(vary1, range1, resetparams = altparams_tat) # standard param values
-probthreshold_tat3 <- twowayvary(vary1, range1, resetparams = altparams_tat3) # standard param values
+probthreshold_tat <- twowayvary(vary1, range1, resetparams = altparams_tat) 
+probthreshold_tat3 <- twowayvary(vary1, range1, resetparams = altparams_tat3)
 #outpatient
 altparams <- make.params(hosp = F); 
 probthreshold4 <- twowayvary(vary1, range1, resetparams = altparams)
@@ -551,7 +606,7 @@ layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
 par(mar=c(3,4,3,2), oma=c(2,0,0,0))
 
 plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability", ylab="Net benefit", 
+     xlab="Threshold probability for intervention", ylab="Net benefit", 
      main="Outpatient setting",
      ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
      xaxt='n', lty=5, lwd=2)
@@ -568,7 +623,7 @@ legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day
        lwd=c(1,1,2,1,2), seg.len = 3)
 
 plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability", ylab="Net benefit", 
+     xlab="Threshold probability for intervention", ylab="Net benefit", 
      main="Hospital setting",
      ylim=c(0, max(probthreshold2, na.rm=T)),
      xaxt='n', lwd=2)
@@ -591,7 +646,7 @@ layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
 par(mar=c(3,4,3,2), oma=c(2,0,0,0))
 
 plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability", ylab="Net benefit", 
+     xlab="Threshold probability for intervention", ylab="Net benefit", 
      main="Outpatient setting",
      ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
      xlim=c(0,0.6),
@@ -613,7 +668,7 @@ lines(pt, probthreshold4[5,,1], col='black', lty=1, lwd=1.5)
 #   lwd = c(1.5,1.5,1.5,1.5,1), seg.len=2.5)
 
 plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability", ylab="Net benefit", 
+     xlab="Threshold probability for intervention", ylab="Net benefit", 
      main="Hospital setting",
      ylim=c(0, max(probthreshold2, na.rm=T)), xlim=c(0,0.6),
      xaxt='n', lwd=2)
@@ -632,8 +687,7 @@ legend(x = "bottomright", legend = c(
        col=c(mycolors[1], mycolors[2], mycolors[3], mycolors[3],'black','black','black'), lty=c(5,1,3,1,3,1,4),
   lwd=c(2,2,1.5,1.5,1.5,1.5,1), seg.len = 2)
 
-mtext(side=1, outer=T, text = "Threshold probability above which early intervention
-      for an average case provides net benefit", line=0.5, cex = 0.8)
+mtext(side=1, outer=T, text = "Threshold probability for intervention", line=0.5, cex = 0.8)
 
 
 pt
@@ -649,7 +703,7 @@ probthreshold3[2,,1]
 gethilo <- function(params, level, hosp=T)
 {
   hiloparams <- list()
-  hiloparams$clinicalVsTransmissionBenefit <- (if(hosp) c(5,0.1) else c(0.1,0))
+  hiloparams$clinicalVsTransmissionBenefit <- (if(hosp) c(5,0.2) else c(0.1,0))
   hiloparams$prev <- (if(hosp) c(0.6,0.1) else c(0.2,0.02))
   hiloparams$falseDiagnosisHarm <- c(0.2,0.01)
   hiloparams$clinicalDiagnosisDiscount <- c(1,0.5)
