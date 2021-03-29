@@ -354,13 +354,13 @@ mapTransmissions <- function(params,
                          labels = c("0","250k","500k","750k","1000k")) + 
         theme_bw()+
         theme(legend.key.width=unit(1,"cm"))+ 
-        theme(legend.position = c(0.75, 0.3), 
+        theme(legend.position = c(0.75, 0.28), 
               legend.title = element_text(size = 10), legend.text = element_text(size = 9))
     )
     print(
       detection + geom_label(aes(x=c(15,xmax,22), 
                                  y=c(max(detected_RDT$rn), max(detected_clin$rn)+npts/20, max(detected_NAAT$rn)-npts/20)),
-                    label = paste0(round(c(max(detected_RDT$rn), max(detected_clin$rn), max(detected_NAAT$rn))/(npts)*100,1),"%"),
+                    label = paste0(round(c(max(detected_RDT$rn), max(detected_clin$rn), max(detected_NAAT$rn))/(npts)*100,0),"%"),
                       label.size=0.2, 
                     col=colors[c(2,3,1)])
     )
@@ -442,8 +442,10 @@ mapTransmissions <- function(params,
               # split out T1j and T2j separately:    
               "casetransRDT" = mean(caseevents$Transmits_RDT), 
               "casetransNAAT" = mean(caseevents$Transmits_NAAT),
-              "contacttransRDT" = mean(caseevents$contactTransmits_RDT),
-              "contacttransNAAT" = mean(caseevents$contactTransmits_NAAT)
+              "casetransclin" = mean(caseevents$Transmits_clin),
+    "contacttransRDT" = mean(caseevents$contactTransmits_RDT),
+              "contacttransNAAT" = mean(caseevents$contactTransmits_NAAT),
+    "contacttransclin" = mean(caseevents$contactTransmits_clin)
               
               
               ) ) 
@@ -462,26 +464,40 @@ mo$RDT
 mo$NAAT
 mo$clin
 
-# # Supplemental results, individual components
-# (1-mh$casetransRDT)*1000
-# (1-mo$casetransRDT)*1000
-# (1-mh$casetransNAAT)*1000
-# (1-mo$casetransNAAT)*1000
-# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransRDT)*1000
-# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransRDT)*1000
-# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransNAAT)*1000
-# (1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransNAAT)*1000
-# 
-# (1-0.1)*(1-spec$NAAT) * 1000
-# (1-0.1)*(1-spec$RDT) * 1000
-# (1-0.4)*(1-spec$NAAT) * 1000
-# (1-0.4)*(1-spec$RDT) * 1000
-# 
-# 1000 * mh$NAATclinical * 0.04
-# 1000 * mo$NAATclinical * 0.04/30
-# 1000 * mh$RDTclinical * 0.04
-# 1000 * mo$RDTclinical * 0.04/30
-# 
+mh$RDT
+mh$NAAT
+mh$clin
+
+# Supplemental results, individual components
+(1-mh$casetransRDT)*1000
+(1-mo$casetransRDT)*1000
+(1-mh$casetransNAAT)*1000
+(1-mo$casetransNAAT)*1000
+(1-mh$casetransclin)*1000
+(1-mo$casetransclin)*1000
+params <- make.params(F)
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransRDT)*1000
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransRDT)*1000
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransNAAT)*1000
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransNAAT)*1000
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mh$contacttransclin)*1000
+(1-params$firstGenerationTransmissionWeight)/params$firstGenerationTransmissionWeight *(1-mo$contacttransclin)*1000
+rm(params)
+
+(1-0.1)*(1-spec$NAAT) * 1000
+(1-0.1)*(1-spec$RDT) * 1000
+(1-0.1)*(1-spec$clin) * 1000
+(1-0.4)*(1-spec$NAAT) * 1000
+(1-0.4)*(1-spec$RDT) * 1000
+(1-0.4)*(1-spec$clin) * 1000
+
+1000 * mh$NAATclinical * 0.04
+1000 * mo$NAATclinical * 0.04/30
+1000 * mh$RDTclinical * 0.04
+1000 * mo$RDTclinical * 0.04/30
+1000 * mh$clinclinical * 0.04
+1000 * mo$clinclinical * 0.04/30
+
 # # stochastic variability and sample size
 # size <- 1e6
 # o1 <- o2 <- o3 <- o4 <- numeric(10)
@@ -525,11 +541,11 @@ NB <- function(params, npts=1e6)
         # 
         V_TP <- (mapply(function(x,w,z,v) I_T *( # normalizing constant
                           ( x + clinicalVsTransmissionBenefit*w)  / 
-                          ((1-presx)*(isolationOfKnownCase)) - 
-                          z * falseDiagnosisHarm* v), # normalizing so that one full TP get a 1 on both NB scales, and so that we're in units of avertible transmission
+                          ((1-presx)) - 
+                          z * (1+clinicalVsTransmissionBenefit)*falseDiagnosisHarm* v), # normalizing so that one full TP get a 1 on both NB scales, and so that we're in units of avertible transmission
                       x=trans, w = clinical, z = sens, v=c(1,1,clinicalDiagnosisDiscount, clinicalDiagnosisDiscount))) #already accounted for clinical diagnosis discount in clin detection
         
-        V_FP <-  I_T * falseDiagnosisHarm * c(1,1,clinicalDiagnosisDiscount, clinicalDiagnosisDiscount) * (1-unlist(spec))
+        V_FP <-  I_T * (1+clinicalVsTransmissionBenefit)*falseDiagnosisHarm * c(1,1,clinicalDiagnosisDiscount, clinicalDiagnosisDiscount) * (1-unlist(spec))
         #( (-c_F*clinicalVsTransmissionBenefit ) - (n*isolationOfContacts+1)*i_F)
         # removed factor (1+clinicalVsTransmissionBenefit), to normalize to NB_simple
         
@@ -581,84 +597,245 @@ range1 <- pt#/(1-pt)
 probthreshold <- twowayvary(vary1, range1) # standard param values
 altparams <- make.params(hosp=T); altparams$clinicalDiagnosisDiscount <- 1
 probthreshold2 <- twowayvary(vary1, range1, resetparams = altparams)
-altparams_sens <- altparams_tat <- altparams_tat3 <- altparams
-altparams_sens$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
-altparams_tat$turnaroundTimeNAAT <- 2
-altparams_tat3$turnaroundTimeNAAT <- 3
-probthreshold_sens <- twowayvary(vary1, range1, resetparams = altparams_sens) # standard param values
-probthreshold_tat <- twowayvary(vary1, range1, resetparams = altparams_tat) 
-probthreshold_tat3 <- twowayvary(vary1, range1, resetparams = altparams_tat3)
+altparams_sens <- altparams_lowsens <- altparams_tat <- altparams_tat3 <- altparams
+# altparams_sens$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
+# altparams_lowsens$sensitivityRDT_vsNAAT <- 0.75 # for acute infection, 90% in Kruger, 95% in Igloi
+# altparams_tat$turnaroundTimeNAAT <- 2
+# altparams_tat3$turnaroundTimeNAAT <- 3
+# probthreshold_sens <- twowayvary(vary1, range1, resetparams = altparams_sens) # standard param values
+# probthreshold_lowsens <- twowayvary(vary1, range1, resetparams = altparams_lowsens) # standard param values
+# probthreshold_tat <- twowayvary(vary1, range1, resetparams = altparams_tat) 
+# probthreshold_tat3 <- twowayvary(vary1, range1, resetparams = altparams_tat3)
 #outpatient
 altparams <- make.params(hosp = F); 
 probthreshold4 <- twowayvary(vary1, range1, resetparams = altparams)
 altparams$clinicalDiagnosisDiscount <- 1
 probthreshold3 <- twowayvary(vary1, range1, resetparams = altparams)
-altparams_sens_outpt <- altparams_tat_outpt <- altparams_tat1_outpt <- altparams
-altparams_sens_outpt$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
-altparams_tat_outpt$turnaroundTimeNAAT <- 2 # for acute infection, 90% in Kruger, 95% in Igloi
-altparams_tat1_outpt$turnaroundTimeNAAT <- 1
-probthreshold_sens_outpt <- twowayvary(vary1, range1, resetparams = altparams_sens_outpt) # standard param values
-probthreshold_tat_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat_outpt) # standard param values
-probthreshold_tat1_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat1_outpt) # standard param values
+# altparams_sens_outpt <- altparams_lowsens_outpt <- altparams_tat_outpt <- altparams_tat1_outpt <- altparams
+# altparams_sens_outpt$sensitivityRDT_vsNAAT <- 0.95 # for acute infection, 90% in Kruger, 95% in Igloi
+# altparams_lowsens_outpt$sensitivityRDT_vsNAAT <- 0.75 # for acute infection, 90% in Kruger, 95% in Igloi
+# altparams_tat_outpt$turnaroundTimeNAAT <- 2 # for acute infection, 90% in Kruger, 95% in Igloi
+# altparams_tat1_outpt$turnaroundTimeNAAT <- 1
+# probthreshold_sens_outpt <- twowayvary(vary1, range1, resetparams = altparams_sens_outpt) # standard param values
+# probthreshold_lowsens_outpt <- twowayvary(vary1, range1, resetparams = altparams_lowsens_outpt) # standard param values
+# probthreshold_tat_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat_outpt) # standard param values
+# probthreshold_tat1_outpt <- twowayvary(vary1, range1, resetparams = altparams_tat1_outpt) # standard param values
 
 # Figure 3
-layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
-par(mar=c(3,4,3,2), oma=c(2,0,0,0))
+# New version: 
+# Instead of decision curves, estimate point NB for a fixed 10% prob threshold,
+# NAAT with 3 different turnaround times on the x axis, and Ag-RDT w 3 different sensitivities. 
+base <- NB(params = make.params(hosp=F), npts = 1e6)
+params <- make.params(hosp=F); params$sensitivityRDT_vsNAAT <- 0.85
+lowsens <- NB(params = params, npts = 1e6)
+params <- make.params(hosp=F); params$sensitivityRDT_vsNAAT <- 0.75
+lowestsens <- NB(params = params, npts = 1e6)
 
-plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability for intervention", ylab="Net benefit", 
-     main="Outpatient setting",
-     ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
-     xaxt='n', lty=5, lwd=2)
-axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.08, "A", font=2, cex=1.5)
-lines(pt, probthreshold3[2,,1], col=mycolors[2], lwd=2)
-lines(pt, probthreshold_sens_outpt[2,,1], col=mycolors[2], lty=4, lwd=1)
-lines(pt, probthreshold_tat_outpt[1,,1], col=mycolors[1], lty=3, lwd=1)
-lines(pt, probthreshold_tat1_outpt[1,,1], col=mycolors[1], lty=1, lwd=1)
-legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
-                                  "Ag-RDT (95% acute sens)","Ag-RDT (85% acute sens)"),
-       col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), 
-       lty=c(1,3,5,4,1), 
-       lwd=c(1,1,2,1,2), seg.len = 3)
+# and a heat map?
+# Plot benefit of NAAT as a function of TAT, then benefit of Ag-RDT as a function of sens.
+# Then a heatmap showing difference in NB between the two.
+hospsetting <- T
+baseparams <- make.params(hosp=hospsetting)
+TATs <- seq(0.5,5,by=0.1)
+NB_NAATs_hosp <- numeric(length = length(TATs))
+for (i in 1:length(TATs)) 
+{ params <- baseparams; params$turnaroundTimeNAAT <- TATs[i]
+  NB_NAATs_hosp[i] <- (NB(params))["NAAT"]
+}
+senses <- seq(0.75, 0.95 ,by=0.01)
+NB_RDTs_hosp <- numeric(length = length(senses))
+for (i in 1:length(senses)) 
+{ params <- baseparams; params$sensitivityRDT_vsNAAT <- senses[i]
+NB_RDTs_hosp[i] <- (NB(params))["RDT"]
+}
 
-plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability for intervention", ylab="Net benefit", 
-     main="Hospital setting",
-     ylim=c(0, max(probthreshold2, na.rm=T)),
-     xaxt='n', lwd=2)
-axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0,0.195, "B", font=2, cex=1.5)
-lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
-lines(pt, probthreshold_sens[2,,1], col=mycolors[2], lty=4, lwd=1)
-lines(pt, probthreshold_tat[1,,1], col=mycolors[1], lty=3, lwd=1)
-lines(pt, probthreshold_tat3[1,,1], col=mycolors[1], lty=5, lwd=1)
-legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
-                                    "Ag-RDT (95% sens)", "Ag-RDT (85% sens)"),
-       col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), lty=c(1,3,5,4,1),
-       lwd = c(2,1,1,1,2), seg.len = 3)
+hospsetting <- F
+baseparams <- make.params(hosp=hospsetting)
+NB_NAATs_outpt <- numeric(length = length(TATs))
+for (i in 1:length(TATs)) 
+{ params <- baseparams; params$turnaroundTimeNAAT <- TATs[i]
+NB_NAATs_outpt[i] <- (NB(params))["NAAT"]
+}
+NB_RDTs_outpt <- numeric(length = length(senses))
+for (i in 1:length(senses)) 
+{ params <- baseparams; params$sensitivityRDT_vsNAAT <- senses[i]
+NB_RDTs_outpt[i] <- (NB(params))["RDT"]
+}
 
+# Plot figure 3 (new)
+# fig3cols <- c('darkorchid4','darkorange2')
+# par(mar=c(5,4,3,3), mfrow=c(2,2))
+par(mfrow=c(1,1), mar=c(4,4,1,2), oma=c(0,0,0,0))
+plot(TATs, NB_NAATs_hosp, type = 'l', col=mycolors[1], lty=1,lwd=1.5,
+     ylim = c(0.01,max(NB_NAATs_hosp)),
+     xlim=c(0.3,5.2),
+     xlab = "NAAT turnaround time (days)",
+     ylab = "Net benefit of NAAT, per test")
+lines(TATs, NB_NAATs_outpt, col=mycolors[1], lty=2, lwd=1.5)
+# text(0.5, 0.9*max(NB_NAATs_hosp), "A")
+text(x=1-.03, y=NB_NAATs_hosp[which(TATs==1)] + 0.03, round(NB_NAATs_hosp[which(TATs==1)],2), col=mycolors[1])
+text(x=3-.03, y=NB_NAATs_hosp[which(TATs==3)] + 0.03, round(NB_NAATs_hosp[which(TATs==3)],2), col=mycolors[1])
+text(x=5-.03, y=NB_NAATs_hosp[which(TATs==5)] + 0.03, round(NB_NAATs_hosp[which(TATs==5)],2), col=mycolors[1])
+text(x=1-.03, y=NB_NAATs_outpt[which(TATs==1)] + 0.03, round(NB_NAATs_outpt[which(TATs==1)],3), col=mycolors[1])
+text(x=3-.03, y=NB_NAATs_outpt[which(TATs==3)] + 0.03, round(NB_NAATs_outpt[which(TATs==3)],3), col=mycolors[1])
+text(x=5-.03, y=NB_NAATs_outpt[which(TATs==5)] + 0.03, round(NB_NAATs_outpt[which(TATs==5)],3), col=mycolors[1])
+abline(h=NB_RDTs_hosp[which(senses==.85)], col=mycolors[2], lty=1, lwd=1)
+abline(h=NB_RDTs_outpt[which(senses==.85)], col=mycolors[2], lty=2, lwd=1)
+legend('center', legend = c('NAAT, Hospital','NAAT, Outpatient', "Ag-RDT, Hospital","Ag-RDT, Outpatient"), 
+       col = mycolors[c(1,1,2,2)], lty=c(1,2,1,2), lwd=c(1.5,1.5,1,1), bty = 'n')
+
+plot(senses, NB_RDTs_hosp, type = 'l', col=mycolors[2], lwd=1.5,
+     ylim = c(0.01,max(NB_NAATs_hosp)),
+     xlim=c(0.74, 0.96),
+     xlab = "Ag-RDT sensitivity (vs. NAAT, acute illness)",
+     ylab = "Net benefit of Ag-RDT, per test")
+lines(senses, NB_RDTs_outpt, col=mycolors[2], lty=2, lwd=1.5)
+# text(0.7, 0.9*max(NB_NAATs_hosp), "B")
+text(x=0.75, y=NB_RDTs_hosp[which(senses==0.75)] + 0.03, round(NB_RDTs_hosp[which(senses==0.75)],2), col=mycolors[2])
+text(x=0.85, y=NB_RDTs_hosp[which(senses==0.85)] + 0.03, round(NB_RDTs_hosp[which(senses==0.85)],2), col=mycolors[2])
+text(x=0.95, y=NB_RDTs_hosp[which(senses==0.95)] + 0.03, round(NB_RDTs_hosp[which(senses==0.95)],2), col=mycolors[2])
+text(x=0.75, y=NB_RDTs_outpt[which(senses==0.75)] + 0.03, round(NB_RDTs_outpt[which(senses==0.75)],3), col=mycolors[2])
+text(x=0.85, y=NB_RDTs_outpt[which(senses==0.85)] + 0.03, round(NB_RDTs_outpt[which(senses==0.85)],3), col=mycolors[2])
+text(x=0.95, y=NB_RDTs_outpt[which(senses==0.95)] + 0.03, round(NB_RDTs_outpt[which(senses==0.95)],3), col=mycolors[2])
+legend('center', legend = c('Ag-RDT, Hospital','Ag-RDT, Outpatient'), col = mycolors[2], lty=c(1,2), bty = 'n')
+
+diff_hosp <- (outer(-NB_NAATs_hosp,-NB_RDTs_hosp,"-"))
+library(fields)
+library(colorRamps)
+par(mar=c(4,4,1,2))
+fields::image.plot(x = diff_hosp, 
+                   main="Difference, Hospital setting", axes=F,
+                   cex.main=1,
+                   zlim=c(-max(abs(diff_hosp)), max(abs(diff_hosp))),
+                  col = rev(colorRamps::matlab.like(500)),#hcl.colors(20, "Blue-Red", rev = TRUE),
+                  legend.mar=4)
+axis(1, at=seq(0,1, length = length(TATs))[seq(6,46,by=10)], labels = TATs[seq(6,46,by=10)])
+axis(2, at=seq(0,1, length = length(senses))[seq(1,21,by=5)], labels = senses[seq(1,21,by=5)])
+mtext("NAAT turnaround time (days)", side=1, line=2.5, cex = 1)
+mtext("Ag-RDT sensitivity (vs NAAT, acute)", side=2, line=2.2, cex=1)
+text(x = seq(0,1, length = length(TATs))[which(TATs==1)], 
+     y = seq(0,1, length = length(senses))[which(senses==0.85)], 
+     labels="*", cex=2)
+text(x = seq(0,1, length = length(TATs))[which(TATs==1)], 
+     y = seq(0,1, length = length(senses))[which(senses==0.85)], 
+     labels=round(diff_hosp[which(TATs==1), which(senses==0.85)], 2),
+     pos=4)
+mtext("Favors NAAT                 Favors Ag-RDT",side = 4, line=0.5, font=3)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_hosp, 1, function(x) 
+                      lm(1:length(x) ~ x)$coefficients[1])/length(senses)),
+      col='darkgreen', lty=3)
+text(which.max(apply(diff_hosp,1,min)>0)/length(TATs),0.01,"0", col='darkgreen', srt=-65, pos=3)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_hosp-0.1, 1, function(x) lm((1:length(x))  ~ x)$coefficients[1])/length(senses)),
+      col='darkblue', lty=3)
+text(which.max(apply(diff_hosp-0.1,1,min)>0)/length(TATs),0.01,"0.1", col='darkblue', srt=-65, pos=2)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_hosp+0.1, 1, function(x) lm((1:length(x))  ~ x)$coefficients[1])/length(senses)),
+      col='darkred', lty=3)
+text(which.max(apply(diff_hosp+0.1,1,min)>0)/length(TATs),0.01,"-0.1", col='darkred', srt=-65, pos=3)
+
+
+diff_outpt <- (outer(-NB_NAATs_outpt,-NB_RDTs_outpt,"-"))
+fields::image.plot(x = diff_outpt, main="Difference, Outpatient setting", 
+                   axes=F, cex.main=1,
+                   zlim=c(-max(abs(diff_outpt)), max(abs(diff_outpt))),
+                   col = rev(colorRamps::matlab.like(500)),
+                   legend.mar=5)
+axis(1, at=seq(0,1, length = length(TATs))[seq(6,46,by=10)], labels = TATs[seq(6,46,by=10)])
+axis(2, at=seq(0,1, length = length(senses))[seq(1,21,by=5)], labels = senses[seq(1,21,by=5)])
+mtext("NAAT turnaround time (days)", side=1, line=2.5, cex = 1)
+mtext("Ag-RDT sensitivity (vs NAAT, acute)", side=2, line=2.2, cex=1)
+text(x = seq(0,1, length = length(TATs))[which(TATs==3)], 
+     y = seq(0,1, length = length(senses))[which(senses==0.85)], 
+     labels="*", cex=2)
+text(x = seq(0,1, length = length(TATs))[which(TATs==3)], 
+     y = seq(0,1, length = length(senses))[which(senses==0.85)], 
+     labels=round(diff_outpt[which(TATs==3), which(senses==0.85)], 3),
+    pos=4)
+mtext("Favors NAAT                 Favors Ag-RDT",side = 4, line=0.5, font=3)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_outpt, 1, function(x) 
+        lm(1:length(x) ~ x)$coefficients[1])/length(senses)),
+      col='darkgreen', lty=3)
+text(which.max(apply(diff_outpt,1,min)>0)/length(TATs),0.01,"0", col='darkgreen', srt=-70, pos=3)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_outpt-0.005, 1, function(x) lm((1:length(x))  ~ x)$coefficients[1])/length(senses)),
+      col='darkblue', lty=3)
+text(which.max(apply(diff_outpt-0.005,1,min)>0)/length(TATs),0.01,"0.005", col='darkblue', srt=-70, pos=3)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_outpt-0.01, 1, function(x) lm((1:length(x))  ~ x)$coefficients[1])/length(senses)),
+      col='darkblue', lty=3)
+text(which.max(apply(diff_outpt-0.01,1,min)>0)/length(TATs),0.01,"0.01", col='darkblue', srt=-70, pos=2)
+lines(seq(0,1, length = length(TATs)),
+      (apply(diff_outpt+0.005, 1, function(x) lm((1:length(x))  ~ x)$coefficients[1])/length(senses)),
+      col='darkred', lty=3)
+text(which.max(apply(diff_outpt+0.005,1,min)>0)/length(TATs),0.01,"-0.005", col='darkred', srt=-70, pos=3)
+
+
+
+
+
+# # Supplemental figure = old version of fig3, with decision curves:
+# layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
+# par(mar=c(3,4,3,2), oma=c(2,0,0,0))
+# 
+# plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
+#      xlab="Threshold probability for intervention", ylab="Net benefit", 
+#      main="Outpatient setting",
+#      ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
+#      xaxt='n', lty=5, lwd=2)
+# axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
+# text(0,0.06, "A", font=2, cex=1.5)
+# lines(pt, probthreshold3[2,,1], col=mycolors[2], lwd=2)
+# lines(pt, probthreshold_sens_outpt[2,,1], col=mycolors[2], lty=4, lwd=1)
+# lines(pt, probthreshold_lowsens_outpt[2,,1], col=mycolors[2], lty=5, lwd=1)
+# lines(pt, probthreshold_tat_outpt[1,,1], col=mycolors[1], lty=3, lwd=1)
+# lines(pt, probthreshold_tat1_outpt[1,,1], col=mycolors[1], lty=1, lwd=1)
+# legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
+#                                   "Ag-RDT (95% acute sens)","Ag-RDT (85% acute sens)"),
+#        col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), 
+#        lty=c(1,3,5,4,1), 
+#        lwd=c(1,1,2,1,2), seg.len = 3)
+# 
+# plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
+#      xlab="Threshold probability for intervention", ylab="Net benefit", 
+#      main="Hospital setting",
+#      ylim=c(0, max(probthreshold2, na.rm=T)),
+#      xaxt='n', lwd=2)
+# axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
+# text(0,0.6, "B", font=2, cex=1.5)
+# lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
+# lines(pt, probthreshold_sens[2,,1], col=mycolors[2], lty=4, lwd=1)
+# lines(pt, probthreshold_tat[1,,1], col=mycolors[1], lty=3, lwd=1)
+# lines(pt, probthreshold_tat3[1,,1], col=mycolors[1], lty=5, lwd=1)
+# legend(x = "bottomleft", legend = c("NAAT (1 day)", "NAAT (2 day)", "NAAT (3 day)", 
+#                                     "Ag-RDT (95% sens)", "Ag-RDT (85% sens)"),
+#        col=c(mycolors[1],mycolors[1],mycolors[1],mycolors[2],mycolors[2]), lty=c(1,3,5,4,1),
+#        lwd = c(2,1,1,1,2), seg.len = 3)
+# 
 
 
 # Figure 4
+# with clinical curves only in supplemental version, if at all
 
 layout(t(array(c(1,1,1,2,2,2,2), dim=c(1,7))))
-par(mar=c(3,4,3,2), oma=c(2,0,0,0))
+par(mar=c(3,4,3,1), oma=c(1,0,0,0))
 
 plot(pt, probthreshold3[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability for intervention", ylab="Net benefit", 
+     xlab="Threshold probability for intervention", ylab="Net benefit per patient evaluated", 
      main="Outpatient setting",
      ylim=c(0, max(probthreshold3, na.rm=T)*0.9),
-     xlim=c(0,0.6),
-     xaxt='n', lty=5, lwd=2)
-axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0.05,0.08, "A", font=2, cex=1.5)
+     xlim=c(0,1),
+     xaxt='n', lwd=2, cex.lab=1.1)
+axis(side=1, at=seq(0,1,by=0.2), labels = c(0, 0.2,0.4,0.6,0.8,1.0) )#c("0%", "20%", "40%", "60%", '80%', "100%"))
+text(0.02,0.005, "A", font=2, cex=1.5)
 lines(pt, probthreshold3[2,,1], col=mycolors[2], lwd=2)
-lines(pt, probthreshold3[3,,1], col=mycolors[3], lwd=1.5, lty=3)
-lines(pt, probthreshold3[5,,1], col='black', lty=3, lwd=1.5)
-abline(h = 0, col='black', lty=4)
+lines(pt, probthreshold3[3,,1], col=mycolors[3], lwd=1.5, lty=2)
+# lines(pt, probthreshold3[4,,1], col='black', lwd=1.5, lty=2)
+abline(h = 0, col='black', lty=3)
 lines(pt, probthreshold4[3,,1], col=mycolors[3], lty=1, lwd=1.5)
-lines(pt, probthreshold4[5,,1], col='black', lty=1, lwd=1.5)
+# lines(pt, probthreshold4[4,,1], col='black', lty=1, lwd=1.5)
 # legend(x = "bottomright", legend = c(
 #   # "NAAT (3 day)","Ag-RDT (85% sens)",
 #   "Clinical, full", "Clinical, reduced",
@@ -666,35 +843,34 @@ lines(pt, probthreshold4[5,,1], col='black', lty=1, lwd=1.5)
 #   # col=c(mycolors[1],mycolors[2],mycolors[3], mycolors[3],'black','black','black'), lty=c(5,1,1,3,1,3,4),
 #   col=c(mycolors[3], mycolors[3],'black','black','black'), lty=c(3,1,3,1,4),
 #   lwd = c(1.5,1.5,1.5,1.5,1), seg.len=2.5)
-
-plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
-     xlab="Threshold probability for intervention", ylab="Net benefit", 
-     main="Hospital setting",
-     ylim=c(0, max(probthreshold2, na.rm=T)), xlim=c(0,0.6),
-     xaxt='n', lwd=2)
-axis(side=1, at=seq(0,1,by=0.2), labels = c("0%", "20%", "40%", "60%", '80%', "100%"))
-text(0.05,0.195, "B", font=2, cex=1.5)
-lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
-lines(pt, probthreshold2[3,,1], col=mycolors[3], lwd=1.5, lty=3)
-lines(pt, probthreshold2[5,,1], col='black', lty=3, lwd=1.5)
-abline(h = 0, col='black', lty=4)
-lines(pt, probthreshold[3,,1], col=mycolors[3], lty=1, lwd=1.5)
-lines(pt, probthreshold[5,,1], col='black', lty=1, lwd=1.5)
-legend(x = "bottomright", legend = c(
-  "NAAT","Ag-RDT",
-  "Clinical, full", "Clinical, reduced",
-                                  "Treat all, full", "Treat all, reduced", "Treat none"),
-       col=c(mycolors[1], mycolors[2], mycolors[3], mycolors[3],'black','black','black'), lty=c(5,1,3,1,3,1,4),
+legend(x = "topright", legend = c(
+  "NAAT guided","Ag-RDT guided",
+  "Clinical judgment, full intensity", "Clinical judgment, reduced intensity", "Treat none"),
+  col=c(mycolors[1], mycolors[2], mycolors[3], mycolors[3],'black'), lty=c(1,1,2,1,3),
   lwd=c(2,2,1.5,1.5,1.5,1.5,1), seg.len = 2)
 
-mtext(side=1, outer=T, text = "Threshold probability for intervention", line=0.5, cex = 0.8)
+plot(pt, probthreshold2[1,,1], type='l', col=mycolors[1],
+     xlab="Threshold probability for intervention", ylab="Net benefit per patient evaluated", 
+     main="Hospital setting",
+     ylim=c(0, max(probthreshold2, na.rm=T)), xlim=c(0,1),
+     xaxt='n', lwd=2, cex.lab=1.1)
+axis(side=1, at=seq(0,1,by=0.2), labels = c(0,0.2,0.4,0.6,0.8,1))#c("0%", "20%", "40%", "60%", '80%', "100%"))
+text(0.02,0.04, "B", font=2, cex=1.5)
+lines(pt, probthreshold2[2,,1], col=mycolors[2], lwd=2)
+lines(pt, probthreshold2[3,,1], col=mycolors[3], lwd=1.5, lty=2)
+# lines(pt, probthreshold2[4,,1], col='black', lty=2, lwd=1.5)
+abline(h = 0, col='black', lty=3)
+lines(pt, probthreshold[3,,1], col=mycolors[3], lty=1, lwd=1.5)
+# lines(pt, probthreshold[4,,1], col='black', lty=1, lwd=1.5)
+
+mtext(side=1, outer=T, text = "Harm:benefit ratio", line=-0.5, cex = 0.8)
 
 
 pt
-probthreshold2[5,,1]
+probthreshold2[4,,1]
 probthreshold2[1,,1]
 pt
-probthreshold3[5,,1]
+probthreshold3[4,,1]
 probthreshold3[2,,1]
 
 
@@ -710,7 +886,7 @@ gethilo <- function(params, level, hosp=T)
   hiloparams$presx <- c(0.5,0.12)
   hiloparams$Period <- c(8,3)
   hiloparams$isolationOfKnownCase <- (if (hosp) c(1,0.5) else c(0.9,0.4))
-  hiloparams$isolationOfCasePendingResult <- (if(hosp) c(0.9, 0.4) else c(0.8, 0))
+  hiloparams$isolationOfCasePendingResult <- (if(hosp) c(0.9, 0.4) else c(0.7, 0))
   hiloparams$isolationOfContacts <- c(0.7,0)
   hiloparams$sxOnsetDay <- c(4,1)
   hiloparams$medianPresentationDay <- (if(hosp) c(8, 3) else c(5,2))
@@ -752,59 +928,59 @@ gethilo <- function(params, level, hosp=T)
 
 ###### sensitivity, net benefit  ##########
 set.seed(55555)
-hospplot <- F
+hospplot <- T
 resetparams <- make.params(hosp=hospplot)
 highparams <- gethilo(params = resetparams, level="high", hosp = hospplot)
 lowparams <- gethilo(params = resetparams, level="low", hosp=hospplot)
 excludeparams <- c("weibpar", "normpar", "csens_h","csens_o","cspec_h","cspec_o")
-excludeparams_clin <- c("weibpar", "normpar", "csens_h","csens_o","cspec_h","cspec_o", "isolationOfContacts")
-NBhigh <- NBlow <- array(dim=c(5,length(resetparams)),dimnames = list(c("NAAT","RDT","clin","flex","all"), names(resetparams)))
+# excludeparams_clin <- c("weibpar", "normpar", "csens_h","csens_o","cspec_h","cspec_o", "isolationOfContacts")
+NBhigh <- NBlow <- array(dim=c(4,length(resetparams)),dimnames = list(c("NAAT","RDT","clin","all"), names(resetparams)))
 for (name in names(resetparams))
 { 
   onehighparam <- onelowparam <- resetparams; 
   onehighparam[[name]] <- highparams[[name]]
   onelowparam[[name]] <- lowparams[[name]]
 NBref <- NB(resetparams)
-  NBhigh[,name] <- NB(params = onehighparam)
-  NBlow[,name] <- NB(params = onelowparam)
+  NBhigh[,name] <- NB(params = onehighparam, npts = 1e5)
+  NBlow[,name] <- NB(params = onelowparam, npts = 1e5)
 
 }
-NBhigh <- rbind(NBhigh, NBhigh["RDT",]/NBhigh["NAAT",], NBhigh["RDT",]/NBhigh["clin",])
-NBlow <- rbind(NBlow, NBlow["RDT",]/NBlow["NAAT",], NBlow["RDT",]/NBlow["clin",])
-rownames(NBhigh)[6] <- rownames(NBlow)[6] <- "assayratio"
-rownames(NBhigh)[7] <- rownames(NBlow)[7] <- "clinratio"
+NBhigh <- rbind(NBhigh, NBhigh["RDT",]- NBhigh["NAAT",], NBhigh["RDT",]- NBhigh["all",])
+NBlow <- rbind(NBlow, NBlow["RDT",] - NBlow["NAAT",], NBlow["RDT",]-  NBlow["all",])
+rownames(NBhigh)[5] <- rownames(NBlow)[5] <- "assaydiff"
+rownames(NBhigh)[6] <- rownames(NBlow)[6] <- "clindiff"
 library(reshape2)
-dathigh <- melt(NBhigh["assayratio",]); dathigh$val <- "High parameter value"
-dathighclin <- melt(NBhigh["clinratio",]); dathighclin$val <- "High parameter value"
-datlow <- melt(NBlow["assayratio",]); datlow$val <- "Low parameter value"
-datlowclin <- melt(NBlow["clinratio",]); datlowclin$val <- "Low parameter value"
+dathigh <- melt(NBhigh["assaydiff",]); dathigh$val <- "Highest value"
+# dathighclin <- melt(NBhigh["clindiff",]); dathighclin$val <- "Highest value"
+datlow <- melt(NBlow["assaydiff",]); datlow$val <- "Lowest value"
+# datlowclin <- melt(NBlow["clindiff",]); datlowclin$val <- "Lowest value"
 datlow$names <- datlowclin$names <- rownames(datlow); dathigh$names <- dathighclin$names <- rownames(dathigh)
-baseline <- NBref["RDT"]/NBref["NAAT"]; baselineclin <- NBref["RDT"]/NBref["clin"]
+baseline <- NBref["RDT"]-NBref["NAAT"]; baselineclin <- NBref["RDT"]-NBref["all"]
 
 require(dplyr)
 dat <- rbind(datlow, dathigh) 
-datclin <- rbind(datlowclin, dathighclin) 
-keepnames <- setdiff(dathigh$names[pmax(dathigh$value/baseline, datlow$value/baseline, dathigh$value/datlow$value, datlow$value/dathigh$value) >
-                                     1.05], excludeparams)
-keepnamesclin <- setdiff(dathighclin$names[pmax(dathighclin$value/baselineclin, datlowclin$value/baselineclin, dathighclin$value/datlowclin$value, datlowclin$value/dathighclin$value) > 
-                                             1.1], excludeparams_clin)
-dat <- subset(dat, (dat$names %in% keepnames) ); datclin <- subset(datclin, (datclin$names %in% keepnamesclin) )
-dat <- dat %>% arrange(names); datclin <- datclin %>% arrange(names)
+# datclin <- rbind(datlowclin, dathighclin) 
+# keep if crosses zero, or if magnitude of diff changes by >4/3x
+keepnames <- setdiff(dathigh$names[dathigh$value/baseline>4/3 | datlow$value/baseline>2 |
+                                     dathigh$value/baseline<3/4 | datlow$value/baseline<0.5], 
+                     excludeparams)
+dat <- subset(dat, (dat$names %in% keepnames) )#; datclin <- subset(datclin, (datclin$names %in% keepnamesclin) )
+dat <- dat %>% arrange(names)#; datclin <- datclin %>% arrange(names)
 
-# and include a version with extremes of multiple parameters
-Nparams <- Rparams <- Nparamsclin <- Rparamsclin <- Nparamsclin2 <- Rparamsclin2  <- resetparams
-for (name in keepnames)
-   if (dat %>% filter(names==name, val=="High parameter value") %>% select(value) > 
-                            dat %>% filter(names==name, val=="Low parameter value") %>% select(value)) 
-    {Rparams[[name]] <- highparams[[name]]; Nparams[[name]] <- lowparams[[name]]} else 
-    {Rparams[[name]] <- lowparams[[name]]; Nparams[[name]] <- highparams[[name]]}
-for (name in keepnamesclin)
-  if (datclin %>% filter(names==name, val=="High parameter value") %>% select(value) > 
-      datclin %>% filter(names==name, val=="Low parameter value") %>% select(value)) 
-  {Rparamsclin[[name]] <- highparams[[name]]; Nparamsclin[[name]] <- lowparams[[name]];
-  Rparamsclin2[[name]] <- highparams[[name]]; Nparamsclin2[[name]] <- lowparams[[name]]} else 
-  {Rparamsclin[[name]] <- lowparams[[name]]; Nparamsclin[[name]] <- highparams[[name]];
-  Rparamsclin2[[name]] <- lowparams[[name]]; Nparamsclin2[[name]] <- highparams[[name]]}
+# # and include a version with extremes of multiple parameters
+# Nparams <- Rparams <- Nparamsclin <- Rparamsclin <- Nparamsclin2 <- Rparamsclin2  <- resetparams
+# for (name in keepnames)
+#    if (dat %>% filter(names==name, val=="Highest value") %>% select(value) > 
+#                             dat %>% filter(names==name, val=="Lowest value") %>% select(value)) 
+#     {Rparams[[name]] <- highparams[[name]]; Nparams[[name]] <- lowparams[[name]]} else 
+#     {Rparams[[name]] <- lowparams[[name]]; Nparams[[name]] <- highparams[[name]]}
+# for (name in keepnamesclin)
+#   if (datclin %>% filter(names==name, val=="Highest value") %>% select(value) > 
+#       datclin %>% filter(names==name, val=="Lowest value") %>% select(value)) 
+#   {Rparamsclin[[name]] <- highparams[[name]]; Nparamsclin[[name]] <- lowparams[[name]];
+#   Rparamsclin2[[name]] <- highparams[[name]]; Nparamsclin2[[name]] <- lowparams[[name]]} else 
+#   {Rparamsclin[[name]] <- lowparams[[name]]; Nparamsclin[[name]] <- highparams[[name]];
+#   Rparamsclin2[[name]] <- lowparams[[name]]; Nparamsclin2[[name]] <- highparams[[name]]}
 
 # dat <- rbind(c(NB(params = Rparams)["RDT"]/ 
 #                  NB(params = Rparams)["NAAT"],
@@ -831,119 +1007,96 @@ dat$value <- as.numeric(dat$value)
 datclin$value <- as.numeric(datclin$value)
 
 # rename params for display
-niceParamNames <- names(make.params())
-niceParamNames['prev'] <- 
-  "Prevalence of COVID-19"
-niceParamNames['sensitivityNAAT'] <- 
-  "Sensitivity of NAAT"
-niceParamNames['sensitivityRDT_vsNAAT'] <- 
-  "Sensitivity of RDT (vs NAAT, acute)"
-niceParamNames['isolationOfKnownCase'] <- 
-  "Isolation after case diagnosis"
-niceParamNames['isolationOfCasePendingResult'] <- 
-  "Isolation awaiting test result"
-niceParamNames['infectivityScale'] <- 
-  "Viral burden - infectivity association"
-niceParamNames['turnaroundTimeNAAT'] <- 
-  "NAAT turnaround time (days)"
-niceParamNames['minimumInfectiousLogVirus'] <-
-  "Minimum infectious viral burden (log 10)"
-niceParamNames['isolationOfContacts'] <- 
-  "Isolation of contacts"
-niceParamNames['firstGenerationTransmissionWeight'] <- 
-  "Importance of 1st-generation transmission"
-niceParamNames['sxOnsetDay'] <- 
-  "Days from exposure to symptoms"
-niceParamNames['turnaroundTimeRDT'] <- 
-  "Ag-RDT turnaround time (days)"
-niceParamNames['dailyDecayClinicalBenefit'] <- 
-  "Time sensivity of clinical intervention"
-niceParamNames['specificityRDT'] <- 
-  "Specificity of Ag-RDT"
-niceParamNames["specificityClinician"] <- 
-  "Specificity of clinician judgment"
-niceParamNames["sensitivityClinician"] <- 
-  "Sensitivity of clinician judgment"
-niceParamNames["clinicalDiagnosisDiscount"] <- 
-  "Intensity reduction when diagnosed clinically"
-niceParamNames["falseDiagnosisHarm"] <- 
-  "Relative harm of false positives"
-niceParamNames["clinicalVsTransmissionBenefit"] <- 
-  "Contribution of clinical versus transmission\neffects to net benefit"
-niceParamNames["medianPresentationDay"] <- 
-  "Median days from symptoms to presentation"
+if(is.na(niceParamNames)){
+  niceParamNames <- names(make.params())
+  niceParamNames['prev'] <- 
+    "Prevalence of COVID-19"
+  niceParamNames['sensitivityNAAT'] <- 
+    "Sensitivity of NAAT"
+  niceParamNames['sensitivityRDT_vsNAAT'] <- 
+    "Sensitivity of RDT (vs NAAT, acute)"
+  niceParamNames['isolationOfKnownCase'] <- 
+    "Isolation after case diagnosis"
+  niceParamNames['isolationOfCasePendingResult'] <- 
+    "Isolation awaiting test result"
+  niceParamNames['infectivityScale'] <- 
+    "Viral burden - infectivity association"
+  niceParamNames['turnaroundTimeNAAT'] <- 
+    "NAAT turnaround time (days)"
+  niceParamNames['minimumInfectiousLogVirus'] <-
+    "Minimum infectious viral burden (log 10)"
+  niceParamNames['isolationOfContacts'] <- 
+    "Isolation of contacts"
+  niceParamNames['firstGenerationTransmissionWeight'] <- 
+    "Importance of 1st-generation transmission"
+  niceParamNames['sxOnsetDay'] <- 
+    "Days from exposure to symptoms"
+  niceParamNames['presx'] <- 
+    "Presymptomatic transmission"
+  niceParamNames['turnaroundTimeRDT'] <- 
+    "Ag-RDT turnaround time (days)"
+  niceParamNames['dailyDecayClinicalBenefit'] <- 
+    "Time sensivity of clinical intervention"
+  niceParamNames['specificityRDT'] <- 
+    "Specificity of Ag-RDT"
+  niceParamNames["specificityClinician"] <- 
+    "Specificity of clinician judgment"
+  niceParamNames["sensitivityClinician"] <- 
+    "Sensitivity of clinician judgment"
+  niceParamNames["clinicalDiagnosisDiscount"] <- 
+    "Reduced intensity when diagnosed clinically"
+  niceParamNames["falseDiagnosisHarm"] <- 
+    "Relative harm of false positives"
+  niceParamNames["clinicalVsTransmissionBenefit"] <- 
+    "Contribution of clinical versus transmission\neffects to net benefit"
+  niceParamNames["medianPresentationDay"] <- 
+    "Median days from symptoms to presentation"
+}
 
 # prep for tornado plotting
 class(dat) <- c("tornado", class(dat)); class(datclin) <- c("tornado", class(datclin))
 attr(dat, "output_name") <- "value"; attr(datclin, "output_name") <- "value"
-dat$names <- paste0(niceParamNames[dat$names], "\n(",unlist(lowparams)[dat$names], "-",unlist(highparams)[dat$names],")")
-datclin$names <- paste0(niceParamNames[datclin$names], "\n(",unlist(lowparams)[datclin$names], "-",unlist(highparams)[datclin$names],")")
+dat$names <- paste0(niceParamNames[dat$names], " (",unlist(lowparams)[dat$names], "-",unlist(highparams)[dat$names],")")
+# datclin$names <- paste0(niceParamNames[datclin$names], "\n(",unlist(lowparams)[datclin$names], "-",unlist(highparams)[datclin$names],")")
 
 library(ggplot2)
 library(patchwork)
 source("tornadoplot.R")
 if(hospplot) (rdtnaat_h <- ggplot_tornado(dat, baseline, title="Net Benefit of Ag-RDT\nversus NAAT, hospital setting") +
-                ylim(c(0,1.6))+
-                       ylab("Value of Ag-RDT relative to NAAT \n(values >1 favor Ag-RDT)") +
+                ylim(c(-.1,.1))+
+                       ylab("Incremental net benefit of Ag-RDT relative to NAAT                          \n(values >0 favor Ag-RDT)") +
                        xlab("Parameter (range explored)") + 
                 geom_hline(yintercept = 1, lty=3)
     # scale_y_log10(limits=c(0.5,5), breaks = c(0.5,1,2,4,8))
       ) else
       (rdtnaat_o <- ggplot_tornado(dat, baseline, title="Net Benefit of Ag-RDT\nversus NAAT, outpatient setting") +
-         ylim(c(0,2.2))+
+         ylim(c(-0.005,0.02))+
                 ylab("") +
                 xlab("Parameter (range explored)") + 
          geom_hline(yintercept = 1, lty=3)
          # scale_y_log10(limits=c(0.5,max(dat$value)), breaks = c(0.5,1,2,4,8,16,32))
        ) 
-if(hospplot) (rdtclin_h <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, hospital setting") + 
-                theme(legend.position = "none")+
-                ylab("Value of Ag-RDT relative to clinical judgment \n(values >1 favor Ag-RDT)") +
-                 xlab("Parameter (range explored)") +
-                geom_hline(yintercept = 1, lty=3)
-              ) else
-      (rdtclin_o <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, outpatient setting") + theme(legend.position = "none") +
-          ylab("") +
-          xlab("Parameter (range explored)") +
-         geom_hline(yintercept = 1, lty=3) 
-          )
+# if(hospplot) (rdtclin_h <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, hospital setting") + 
+#                 theme(legend.position = "none")+
+#                 ylab("Value of Ag-RDT relative to clinical judgment \n(values >0 favor Ag-RDT)") +
+#                  xlab("Parameter (range explored)") +
+#                 geom_hline(yintercept = 1, lty=3)
+#               ) else
+#       (rdtclin_o <- ggplot_tornado(datclin, baselineclin, title="Net Benefit of Ag-RDT\nversus clinical judgment, outpatient setting") + theme(legend.position = "none") +
+#           ylab("") +
+#           xlab("Parameter (range explored)") +
+#          geom_hline(yintercept = 1, lty=3) 
+#           )
   #to get outpatient setting, modify hospplot and repeat above.
- rdtnaat_o + theme(legend.position = c(0.25,0.15)) +
- rdtnaat_h +   theme(legend.position = 'none') + 
-           plot_layout(ncol = 1, heights = c(5,2))
- pdf(file = "DCA Fig4.pdf", width=9, height=9)
- rdtnaat_o + theme(legend.position = c(0.25,0.15)) +
-   rdtnaat_h +   theme(legend.position = 'none') + 
-   plot_layout(ncol = 1, heights = c(5,2))
+ pdf(file = "DCA Fig5.pdf", width=6, height=9)
+ rdtnaat_o + theme(legend.position = 'none') +
+   rdtnaat_h +   theme(legend.position = 'bottom') + 
+   plot_layout(ncol = 1, heights = c(4,4))
     dev.off()
 
-      rdtclin_o + rdtclin_h + plot_layout(ncol = 1, heights = c(2,2))
-      pdf(file = "DCA Fig S6.pdf", width=9, height=9)
-        rdtclin_o + theme(legend.position = c(0.7,0.15)) +
-          rdtclin_h + theme(legend.position = 'none') +
-          plot_layout(ncol = 1, heights = c(4,2))
-        dev.off()
-
-# for caption:
-                
-if(hospplot) 
-  { hi_benefit_clin_h <- NB(params = Nparamsclin)["RDT"]/ 
-            NB(params = Nparamsclin)["clin"]
-hi_benefit_h <- NB(params = Nparams)["RDT"]/ 
-  NB(params = Nparams)["clin"] 
-lo_benefit_clin_h <- NB(params = Rparamsclin)["RDT"]/ 
-  NB(params = Rparamsclin)["clin"]
-lo_benefit_h <- NB(params = Rparams)["RDT"]/ 
-  NB(params = Rparams)["clin"] } else
-  { hi_benefit_clin_o <- NB(params = Nparamsclin)["RDT"]/ 
-    NB(params = Nparamsclin)["clin"]
-  hi_benefit_o <- NB(params = Nparams)["RDT"]/ 
-    NB(params = Nparams)["clin"] 
-  lo_benefit_clin_o <- NB(params = Rparamsclin)["RDT"]/ 
-    NB(params = Rparamsclin)["clin"]
-  lo_benefit_o <- NB(params = Rparams)["RDT"]/ 
-    NB(params = Rparams)["clin"] } 
- 
-
-
-
+      # rdtclin_o + rdtclin_h + plot_layout(ncol = 1, heights = c(2,2))
+      # pdf(file = "DCA Fig S6.pdf", width=9, height=9)
+      #   rdtclin_o + theme(legend.position = c(0.7,0.15)) +
+      #     rdtclin_h + theme(legend.position = 'none') +
+      #     plot_layout(ncol = 1, heights = c(4,2))
+      #   dev.off()
